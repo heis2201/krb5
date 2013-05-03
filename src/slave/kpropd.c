@@ -1278,7 +1278,7 @@ kerberos_authenticate(context, fd, clientp, etype, my_sin)
     /*
      * Set recv_addr and send_addr
      */
-    sockaddr2krbaddr(context, my_sin->ss_family, (struct sockaddr *) my_sin,
+    sockaddr2krbaddr(context, ss2sa(my_sin)->sa_family, ss2sa(my_sin),
                      &sender_addr);
 
     sin_length = sizeof(r_sin);
@@ -1287,7 +1287,7 @@ kerberos_authenticate(context, fd, clientp, etype, my_sin)
         exit(1);
     }
 
-    sockaddr2krbaddr(context, r_sin.ss_family, (struct sockaddr *) &r_sin,
+    sockaddr2krbaddr(context, ss2sa(&r_sin)->sa_family, ss2sa(&r_sin),
                      &receiver_addr);
 
     if (debug) {

@@ -132,12 +132,12 @@ kpasswd_sendto_msg_callback(SOCKET fd, void *data, krb5_data *message)
     /* some brain-dead OS's don't return useful information from
      * the getsockname call.  Namely, windows and solaris.  */
 
-    if (local_addr.ss_family == AF_INET &&
+    if (ss2sa(&local_addr)->sa_family == AF_INET &&
         ss2sin(&local_addr)->sin_addr.s_addr != 0) {
         local_kaddr.addrtype = ADDRTYPE_INET;
         local_kaddr.length = sizeof(ss2sin(&local_addr)->sin_addr);
         local_kaddr.contents = (krb5_octet *) &ss2sin(&local_addr)->sin_addr;
-    } else if (local_addr.ss_family == AF_INET6 &&
+    } else if (ss2sa(&local_addr)->sa_family == AF_INET6 &&
                memcmp(ss2sin6(&local_addr)->sin6_addr.s6_addr,
                       in6addr_any.s6_addr, sizeof(in6addr_any.s6_addr)) != 0) {
         local_kaddr.addrtype = ADDRTYPE_INET6;
@@ -272,12 +272,12 @@ change_set_password(krb5_context context,
             break;
         }
 
-        if (remote_addr.ss_family == AF_INET) {
+        if (ss2sa(&remote_addr)->sa_family == AF_INET) {
             remote_kaddr.addrtype = ADDRTYPE_INET;
             remote_kaddr.length = sizeof(ss2sin(&remote_addr)->sin_addr);
             remote_kaddr.contents =
                 (krb5_octet *) &ss2sin(&remote_addr)->sin_addr;
-        } else if (remote_addr.ss_family == AF_INET6) {
+        } else if (ss2sa(&remote_addr)->sa_family == AF_INET6) {
             remote_kaddr.addrtype = ADDRTYPE_INET6;
             remote_kaddr.length = sizeof(ss2sin6(&remote_addr)->sin6_addr);
             remote_kaddr.contents =
