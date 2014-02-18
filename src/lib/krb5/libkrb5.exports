@@ -630,6 +630,9 @@ profile_get_relation_names
 profile_get_string
 profile_get_subsection_names
 profile_get_values
+profile_get_boolean_by_path
+profile_get_integer_by_path
+profile_get_string_by_path
 profile_init
 profile_init_path
 profile_iterator

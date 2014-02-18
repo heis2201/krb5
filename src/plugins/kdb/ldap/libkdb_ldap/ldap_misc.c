@@ -74,15 +74,43 @@ my_strndup(const char *input, size_t limit)
 /* Get integer or string values from the config section, falling back
    to the default section, then to hard-coded values.  */
 static errcode_t
-prof_get_integer_def(krb5_context ctx, const char *conf_section,
+prof_get_integer_def(krb5_context ctx, const char *conf_section, int srv_type,
                      const char *name, int dfl, krb5_ui_4 *out)
 {
     errcode_t err;
+    const char *names[5];
     int out_temp = 0;
 
-    err = profile_get_integer (ctx->profile,
-                               KDB_MODULE_SECTION, conf_section, name,
-                               0, &out_temp);
+    names[0] = KDB_MODULE_SECTION;
+    names[1] = conf_section;
+    names[3] = name;
+    names[4] = 0;
+
+    if(srv_type == KRB5_KDB_SRV_TYPE_KDC)
+        names[2] = KRB5_CONF_LDAP_SECTION_KDC;
+    else if (srv_type == KRB5_KDB_SRV_TYPE_ADMIN)
+        names[2] = KRB5_CONF_LDAP_SECTION_KADMIN;
+    else if (srv_type == KRB5_KDB_SRV_TYPE_OTHER)
+        names[2] = KRB5_CONF_LDAP_SECTION_OTHER;
+    else
+        names[2] = 0;
+
+    if(names[2]) {
+        err = profile_get_integer_by_path (ctx->profile, names, 0, &out_temp);
+        if (err) {
+            krb5_set_error_message(ctx, err, _("Error reading '%s' attribute: %s"),
+                                   name, error_message(err));
+            return err;
+        }
+        if (out_temp != 0) {
+            *out = out_temp;
+            return 0;
+        }
+    }
+
+    names[2] = name;
+    names[3] = 0;
+    err = profile_get_integer_by_path (ctx->profile, names, 0, &out_temp);
     if (err) {
         krb5_set_error_message(ctx, err, _("Error reading '%s' attribute: %s"),
                                name, error_message(err));
@@ -92,9 +120,11 @@ prof_get_integer_def(krb5_context ctx, const char *conf_section,
         *out = out_temp;
         return 0;
     }
-    err = profile_get_integer (ctx->profile,
-                               KDB_MODULE_DEF_SECTION, name, 0,
-                               dfl, &out_temp);
+
+    names[0] = KDB_MODULE_DEF_SECTION;
+    names[1] = name;
+    names[2] = 0;
+    err = profile_get_integer_by_path (ctx->profile, names, dfl, &out_temp);
     if (err) {
         krb5_set_error_message(ctx, err, _("Error reading '%s' attribute: %s"),
                                name, error_message(err));
@@ -107,14 +137,43 @@ prof_get_integer_def(krb5_context ctx, const char *conf_section,
 /* Get integer or string values from the config section, falling back
    to the default section, then to hard-coded values.  */
 static errcode_t
-prof_get_boolean_def(krb5_context ctx, const char *conf_section,
+prof_get_boolean_def(krb5_context ctx, const char *conf_section, int srv_type,
                      const char *name, krb5_boolean dfl, krb5_boolean *out)
 {
     errcode_t err;
     int out_temp = 0;
+    const char *names[5];
 
-    err = profile_get_boolean(ctx->profile, KDB_MODULE_SECTION, conf_section,
-                              name, -1, &out_temp);
+    names[0] = KDB_MODULE_SECTION;
+    names[1] = conf_section;
+    names[3] = name;
+    names[4] = 0;
+
+    if(srv_type == KRB5_KDB_SRV_TYPE_KDC)
+        names[2] = KRB5_CONF_LDAP_SECTION_KDC;
+    else if (srv_type == KRB5_KDB_SRV_TYPE_ADMIN)
+        names[2] = KRB5_CONF_LDAP_SECTION_KADMIN;
+    else if (srv_type == KRB5_KDB_SRV_TYPE_OTHER)
+        names[2] = KRB5_CONF_LDAP_SECTION_OTHER;
+    else
+        names[2] = 0;
+
+    if(names[2]) {
+        err = profile_get_boolean_by_path (ctx->profile, names, -1, &out_temp);
+        if (err) {
+            krb5_set_error_message(ctx, err, _("Error reading '%s' attribute: %s"),
+                                   name, error_message(err));
+            return err;
+        }
+        if (out_temp != -1) {
+            *out = out_temp;
+            return 0;
+        }
+    }
+
+    names[2] = name;
+    names[3] = 0;
+    err = profile_get_boolean_by_path (ctx->profile, names, -1, &out_temp);
     if (err) {
         krb5_set_error_message(ctx, err, _("Error reading '%s' attribute: %s"),
                                name, error_message(err));
@@ -124,13 +183,17 @@ prof_get_boolean_def(krb5_context ctx, const char *conf_section,
         *out = out_temp;
         return 0;
     }
-    err = profile_get_boolean(ctx->profile, KDB_MODULE_DEF_SECTION, name, 0,
-                              dfl, &out_temp);
+
+    names[0] = KDB_MODULE_DEF_SECTION;
+    names[1] = name;
+    names[2] = 0;
+    err = profile_get_boolean_by_path (ctx->profile, names, dfl, &out_temp);
     if (err) {
         krb5_set_error_message(ctx, err, _("Error reading '%s' attribute: %s"),
                                name, error_message(err));
         return err;
     }
+
     *out = out_temp;
     return 0;
 }
@@ -138,14 +201,40 @@ prof_get_boolean_def(krb5_context ctx, const char *conf_section,
 /* We don't have non-null defaults in any of our calls, so don't
    bother with the extra argument.  */
 static errcode_t
-prof_get_string_def(krb5_context ctx, const char *conf_section,
+prof_get_string_def(krb5_context ctx, const char *conf_section, int srv_type,
                     const char *name, char **out)
 {
     errcode_t err;
+    const char *names[5];
 
-    err = profile_get_string (ctx->profile,
-                              KDB_MODULE_SECTION, conf_section, name,
-                              0, out);
+    names[0] = KDB_MODULE_SECTION;
+    names[1] = conf_section;
+    names[3] = name;
+    names[4] = 0;
+
+    if(srv_type == KRB5_KDB_SRV_TYPE_KDC)
+        names[2] = KRB5_CONF_LDAP_SECTION_KDC;
+    else if (srv_type == KRB5_KDB_SRV_TYPE_ADMIN)
+        names[2] = KRB5_CONF_LDAP_SECTION_KADMIN;
+    else if (srv_type == KRB5_KDB_SRV_TYPE_OTHER)
+        names[2] = KRB5_CONF_LDAP_SECTION_OTHER;
+    else
+        names[2] = 0;
+
+    if(names[2]) {
+        err = profile_get_string_by_path (ctx->profile, names, 0, out);
+        if (err) {
+            krb5_set_error_message(ctx, err, _("Error reading '%s' attribute: %s"),
+                                   name, error_message(err));
+            return err;
+        }
+        if (*out != 0)
+            return 0;
+    }
+
+    names[2] = name;
+    names[3] = 0;
+    err = profile_get_string_by_path (ctx->profile, names, 0, out);
     if (err) {
         krb5_set_error_message(ctx, err, _("Error reading '%s' attribute: %s"),
                                name, error_message(err));
@@ -153,9 +242,11 @@ prof_get_string_def(krb5_context ctx, const char *conf_section,
     }
     if (*out != 0)
         return 0;
-    err = profile_get_string (ctx->profile,
-                              KDB_MODULE_DEF_SECTION, name, 0,
-                              0, out);
+
+    names[0] = KDB_MODULE_DEF_SECTION;
+    names[1] = name;
+    names[2] = 0;
+    err = profile_get_string_by_path (ctx->profile, names, 0, out);
     if (err) {
         krb5_set_error_message(ctx, err, _("Error reading '%s' attribute: %s"),
                                name, error_message(err));
@@ -349,7 +440,7 @@ krb5_ldap_read_server_params(krb5_context context, char *conf_section,
      * connections per ldap server.
      */
     if (ldap_context->max_server_conns == 0) {
-        st = prof_get_integer_def (context, conf_section,
+        st = prof_get_integer_def (context, conf_section, srv_type,
                                    KRB5_CONF_LDAP_CONNS_PER_SERVER,
                                    DEFAULT_CONNS_PER_SERVER,
                                    &ldap_context->max_server_conns);
@@ -371,18 +462,11 @@ krb5_ldap_read_server_params(krb5_context context, char *conf_section,
      * server.  The srv_type decides which dn to read.
      */
     if (ldap_context->bind_dn == NULL) {
-        char *name = 0;
-        if (srv_type == KRB5_KDB_SRV_TYPE_KDC)
-            name = KRB5_CONF_LDAP_KDC_DN;
-        else if (srv_type == KRB5_KDB_SRV_TYPE_ADMIN)
-            name = KRB5_CONF_LDAP_KADMIN_DN;
-
-        if (name) {
-            st = prof_get_string_def (context, conf_section, name,
-                                      &ldap_context->bind_dn);
-            if (st)
-                goto cleanup;
-        }
+        st = prof_get_string_def (context, conf_section, srv_type,
+                                  KRB5_CONF_LDAP_DN,
+                                  &ldap_context->bind_dn);
+        if (st)
+            goto cleanup;
     }
 
     /*
@@ -391,7 +475,7 @@ krb5_ldap_read_server_params(krb5_context context, char *conf_section,
      * the KDC, ADMIN and PASSWD dns.
      */
     if (ldap_context->service_password_file == NULL) {
-        st = prof_get_string_def (context, conf_section,
+        st = prof_get_string_def (context, conf_section, srv_type,
                                   KRB5_CONF_LDAP_SERVICE_PASSWORD_FILE,
                                   &ldap_context->service_password_file);
         if (st)
@@ -427,12 +511,12 @@ krb5_ldap_read_server_params(krb5_context context, char *conf_section,
         }
     }
 
-    if ((st = prof_get_boolean_def(context, conf_section,
+    if ((st = prof_get_boolean_def(context, conf_section, srv_type,
                                    KRB5_CONF_DISABLE_LAST_SUCCESS, FALSE,
                                    &ldap_context->disable_last_success)))
         goto cleanup;
 
-    if ((st = prof_get_boolean_def(context, conf_section,
+    if ((st = prof_get_boolean_def(context, conf_section, srv_type,
                                    KRB5_CONF_DISABLE_LOCKOUT, FALSE,
                                    &ldap_context->disable_lockout)))
         goto cleanup;
