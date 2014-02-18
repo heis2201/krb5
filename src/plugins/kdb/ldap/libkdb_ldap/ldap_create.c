@@ -67,6 +67,10 @@ krb5_ldap_create(krb5_context context, char *conf_section, char **db_args)
         goto cleanup;
     context->dal_handle->db_context = ldap_context;
     ldap_context->kcontext = context;
+    ldap_context->auth_method = -1;
+    ldap_context->starttls = 0;
+    ldap_context->tls_reqcert = -1;
+    ldap_context->tls_crlcheck = -1;
 
     status = krb5_ldap_parse_db_params(context, db_args);
     if (status) {

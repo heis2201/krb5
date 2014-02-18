@@ -33,6 +33,8 @@
 #include <unistd.h>
 #endif
 
+#include <sasl/sasl.h>
+
 #include "ldap_main.h"
 #include "ldap_service_stash.h"
 #include <kdb5.h>
@@ -44,6 +46,9 @@ krb5_validate_ldap_context(krb5_context context,
     krb5_error_code             st=0;
     unsigned char               *password=NULL;
 
+    if ((ldap_context->auth_method==KRB5_LDAP_AUTH_NONE) ||
+        (ldap_context->auth_method==KRB5_LDAP_AUTH_SASL))
+        goto err_out;
     if (ldap_context->bind_dn == NULL) {
         st = EINVAL;
         krb5_set_error_message(context, st, _("LDAP bind dn value missing "));
@@ -57,8 +62,7 @@ krb5_validate_ldap_context(krb5_context context,
         goto err_out;
     }
 
-    if (ldap_context->bind_pwd == NULL &&
-        ldap_context->service_password_file != NULL) {
+    if (ldap_context->bind_pwd == NULL) {
         if ((st=krb5_ldap_readpassword(context, ldap_context, &password)) != 0) {
             prepend_err_str(context, _("Error reading password from stash: "),
                             st, st);
@@ -66,6 +70,12 @@ krb5_validate_ldap_context(krb5_context context,
         }
 
         ldap_context->bind_pwd = (char *)password;
+        if (ldap_context->bind_pwd == NULL) {
+            st = EINVAL;
+            krb5_set_error_message(context, st,
+                                   _("Error reading password from stash"));
+            goto err_out;
+        }
     }
 
     /* NULL password not allowed */
@@ -80,6 +90,75 @@ err_out:
     return st;
 }
 
+static int
+krb5_ldap_sasl_interact(LDAP *ld, unsigned flags, void *defaults, void *sin)
+{
+    sasl_interact_t *in = NULL;
+    krb5_ldap_context *ldap_context = defaults;
+    int ret = LDAP_OTHER;
+
+    if (ldap_context == NULL) {
+       in->result = NULL;
+       in->len = 0;
+       ret = LDAP_OTHER;
+    }
+
+    if (ld == NULL || sin == NULL)
+        return LDAP_PARAM_ERROR;
+
+    for (in = sin; in != NULL && in->id != SASL_CB_LIST_END; in++) {
+        switch (in->id) {
+        case SASL_CB_USER:
+            if (ldap_context->sasl_user) {
+                in->result = ldap_context->sasl_user;
+                in->len = strlen(ldap_context->sasl_user);
+            } else {
+                in->result = NULL;
+                in->len = 0;
+            }
+            ret = LDAP_SUCCESS;
+            break;
+        case SASL_CB_GETREALM:
+            if (ldap_context->sasl_realm) {
+                in->result = ldap_context->sasl_realm;
+                in->len = strlen(ldap_context->sasl_realm);
+            } else {
+                in->result = NULL;
+                in->len = 0;
+            }
+            ret = LDAP_SUCCESS;
+            break;
+        case SASL_CB_AUTHNAME:
+            if (ldap_context->sasl_auth_user) {
+                in->result = ldap_context->sasl_auth_user;
+                in->len = strlen(ldap_context->sasl_auth_user);
+            } else {
+                in->result = NULL;
+                in->len = 0;
+            }
+            ret = LDAP_SUCCESS;
+            break;
+        case SASL_CB_PASS:
+            if (ldap_context->sasl_secret) {
+                in->result = ldap_context->sasl_secret;
+                in->len = strlen(ldap_context->sasl_secret);
+            } else {
+                in->result = NULL;
+                in->len = 0;
+            }
+            ret = LDAP_SUCCESS;
+            break;
+        default:
+            in->result = NULL;
+            in->len = 0;
+            ret = LDAP_OTHER;
+        }
+    }
+
+    return ret;
+}
+
+
 /*
  * Internal Functions called by init functions.
  */
@@ -88,13 +167,29 @@ static krb5_error_code
 krb5_ldap_bind(krb5_ldap_context *ldap_context,
                krb5_ldap_server_handle *ldap_server_handle)
 {
-    struct berval               bv={0, NULL};
+    krb5_error_code             st=0;
 
-    bv.bv_val = ldap_context->bind_pwd;
-    bv.bv_len = strlen(ldap_context->bind_pwd);
-    return ldap_sasl_bind_s(ldap_server_handle->ldap_handle,
-                            ldap_context->bind_dn, NULL, &bv, NULL,
-                            NULL, NULL);
+    switch(ldap_context->auth_method) {
+    case KRB5_LDAP_AUTH_NONE:
+        st = ldap_simple_bind_s(ldap_server_handle->ldap_handle, NULL, NULL);
+        break;
+    case KRB5_LDAP_AUTH_SIMPLE:
+        st = ldap_simple_bind_s(ldap_server_handle->ldap_handle,
+                                ldap_context->bind_dn,
+                                ldap_context->bind_pwd);
+        break;
+    case KRB5_LDAP_AUTH_SASL:
+        st = ldap_sasl_interactive_bind_s(ldap_server_handle->ldap_handle,
+                                          NULL,
+                                          ldap_context->sasl_mech,
+                                          NULL,
+                                          NULL,
+                                          LDAP_SASL_QUIET,
+                                          &krb5_ldap_sasl_interact,
+                                          (void *)ldap_context);
+        break;
+    }
+    return st;
 }
 
 static krb5_error_code
@@ -116,6 +211,16 @@ krb5_ldap_initialize(krb5_ldap_context *ldap_context,
         krb5_set_error_message(ldap_context->kcontext, KRB5_KDB_ACCESS_ERROR,
                                _("Cannot create LDAP handle for '%s': %s"),
                                server_info->server_name, ldap_err2string(st));
+        st = KRB5_KDB_ACCESS_ERROR;
+        goto err_out;
+    }
+
+    if (ldap_context->starttls
+            && !(strlen(server_info->server_name)>8 && strncmp(server_info->server_name, "ldaps://", 8)==0)
+            && (st = ldap_start_tls_s(ldap_server_handle->ldap_handle, NULL, NULL) != LDAP_SUCCESS)) {
+        if (ldap_context->kcontext)
+            krb5_set_error_message (ldap_context->kcontext, KRB5_KDB_ACCESS_ERROR, "LDAP StartTLS failed. %s",
+                                    ldap_err2string(st));
         st = KRB5_KDB_ACCESS_ERROR;
         goto err_out;
     }
@@ -148,6 +253,7 @@ krb5_error_code
 krb5_ldap_db_init(krb5_context context, krb5_ldap_context *ldap_context)
 {
     krb5_error_code             st=0;
+    krb5_boolean                sasl_mech_supported=TRUE;
     int                         cnt=0, version=LDAP_VERSION3;
     struct timeval              local_timelimit = {10,0};
 
@@ -165,6 +271,70 @@ krb5_ldap_db_init(krb5_context context, krb5_ldap_context *ldap_context)
 #endif
 
     HNDL_LOCK(ldap_context);
+
+    if (ldap_context->tls_cacert_file) {
+        st = ldap_set_option (NULL,
+                        LDAP_OPT_X_TLS_CACERTFILE,
+                        ldap_context->tls_cacert_file);
+        if (st != LDAP_OPT_SUCCESS) {
+            krb5_set_error_message (ldap_context->kcontext, KRB5_KDB_ACCESS_ERROR,
+                                    "Could not set TLS_CACERTFILE: %s",
+                                    ldap_err2string(st));
+            return KRB5_KDB_ACCESS_ERROR;
+        }
+    }
+    if (ldap_context->tls_cacert_dir) {
+        st = ldap_set_option (NULL,
+                        LDAP_OPT_X_TLS_CACERTDIR,
+                        ldap_context->tls_cacert_file);
+        if (st != LDAP_OPT_SUCCESS) {
+            krb5_set_error_message (ldap_context->kcontext, KRB5_KDB_ACCESS_ERROR,
+                                    "Could not set TLS_CACERTDIR: %s",
+                                    ldap_err2string(st));
+            return KRB5_KDB_ACCESS_ERROR;
+        }
+    }
+    if (ldap_context->tls_cert_file) {
+        st = ldap_set_option (NULL,
+                        LDAP_OPT_X_TLS_CERTFILE,
+                        ldap_context->tls_cert_file);
+        if (st != LDAP_OPT_SUCCESS) {
+            krb5_set_error_message (ldap_context->kcontext, KRB5_KDB_ACCESS_ERROR,
+                                    "Could not set TLS_CERTFILE: %s",
+                                    ldap_err2string(st));
+            return KRB5_KDB_ACCESS_ERROR;
+        }
+    }
+    if (ldap_context->tls_cert_key_file) {
+        st = ldap_set_option (NULL,
+                        LDAP_OPT_X_TLS_KEYFILE,
+                        ldap_context->tls_cert_key_file);
+        if (st != LDAP_OPT_SUCCESS) {
+            krb5_set_error_message (ldap_context->kcontext, KRB5_KDB_ACCESS_ERROR,
+                                    "Could not set TLS_KEYFILE: %s",
+                                    ldap_err2string(st));
+            return KRB5_KDB_ACCESS_ERROR;
+        }
+    }
+    if (ldap_context->tls_reqcert!=-1) {
+        st = ldap_set_option (NULL,
+                        LDAP_OPT_X_TLS_REQUIRE_CERT,
+                        &ldap_context->tls_reqcert);
+        if (st != LDAP_OPT_SUCCESS) {
+            krb5_set_error_message (ldap_context->kcontext, KRB5_KDB_ACCESS_ERROR,
+                                    "Could not set TLS_REQUIRE_CERT: %s",
+                                    ldap_err2string(st));
+            return KRB5_KDB_ACCESS_ERROR;
+        }
+    }
+
+    ldap_set_option (NULL,
+                    LDAP_OPT_X_TLS_CRLFILE,
+                    ldap_context->tls_crl_file);
+    ldap_set_option (NULL,
+                    LDAP_OPT_X_TLS_CRLCHECK,
+                    &ldap_context->tls_crlcheck);
+
     while (ldap_context->server_info_list[cnt] != NULL) {
         krb5_ldap_server_info *server_info=NULL;
 
@@ -172,6 +342,20 @@ krb5_ldap_db_init(krb5_context context, krb5_ldap_context *ldap_context)
 
         if (server_info->server_status == NOTSET) {
             unsigned int conns=0;
+
+            /*
+             * Check if the server has to perform SASL authentication
+             */
+            if (ldap_context->auth_method == KRB5_LDAP_AUTH_SASL) {
+                /* Find out if the server supports SASL mechanism */
+                if (has_sasl_mech(context, server_info->server_name, 
+                                  ldap_context->sasl_mech) == 1) {
+                    cnt++;
+                    sasl_mech_supported = FALSE;
+                    continue; /* Check the next LDAP server */
+                }
+                sasl_mech_supported = TRUE;
+            }
 
             krb5_clear_error_message(context);
 
@@ -194,6 +378,12 @@ krb5_ldap_db_init(krb5_context context, krb5_ldap_context *ldap_context)
     }
     HNDL_UNLOCK(ldap_context);
 
+    if (sasl_mech_supported == FALSE) {
+        st = KRB5_KDB_ACCESS_ERROR;
+        krb5_set_error_message(context, st,
+                               _("LDAP servers do not support %s SASL "
+                                 "mechanism"), ldap_context->sasl_mech);
+    }
     return st;
 }
 

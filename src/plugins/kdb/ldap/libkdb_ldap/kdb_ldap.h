@@ -159,12 +159,6 @@ extern void prepend_err_str (krb5_context ctx, const char *s, krb5_error_code er
 #define HNDL_LOCK(lcontext) k5_mutex_lock(&lcontext->hndl_lock)
 #define HNDL_UNLOCK(lcontext) k5_mutex_unlock(&lcontext->hndl_lock)
 
-/* To be used later */
-typedef struct _krb5_ldap_certificates{
-    char *certificate;
-    int  certtype;
-}krb5_ldap_certificates;
-
 /* ldap server info structure */
 
 typedef enum _server_type {PRIMARY, SECONDARY} krb5_ldap_server_type;
@@ -196,18 +190,30 @@ struct _krb5_ldap_server_info {
 /* ldap server structure */
 
 typedef enum {SERVICE_DN_TYPE_SERVER, SERVICE_DN_TYPE_CLIENT} krb5_ldap_servicetype;
+typedef enum {KRB5_LDAP_AUTH_NONE, KRB5_LDAP_AUTH_SIMPLE, KRB5_LDAP_AUTH_SASL} krb5_ldap_authmethod;
 
 typedef struct _krb5_ldap_context {
     krb5_ldap_servicetype         service_type;
     krb5_ldap_server_info         **server_info_list;
     krb5_ui_4                     max_server_conns;
     char                          *conf_section;
+    krb5_ldap_authmethod          auth_method;
     char                          *bind_dn;
     char                          *bind_pwd;
     char                          *service_password_file;
-    char                          *root_certificate_file;
-    krb5_ldap_certificates        **certificates;
-    krb5_ui_4                     cert_count; /* certificate count */
+    krb5_boolean                  starttls;
+    char                          *sasl_mech;
+    char                          *sasl_user;
+    char                          *sasl_auth_user;
+    char                          *sasl_realm;
+    char                          *sasl_secret;
+    char                          *tls_cacert_file;
+    char                          *tls_cacert_dir;
+    char                          *tls_cert_file;
+    char                          *tls_cert_key_file;
+    int                           tls_reqcert;
+    char                          *tls_crl_file;
+    int                           tls_crlcheck;
     k5_mutex_t                    hndl_lock;
     char                          *container_dn;
     krb5_ldap_realm_params        *lrparams;
@@ -271,7 +277,7 @@ krb5_error_code
 krb5_ldap_read_startup_information(krb5_context );
 
 int
-has_sasl_external_mech(krb5_context, char *);
+has_sasl_mech(krb5_context, char *, char *);
 
 int
 has_modify_increment(krb5_context, char *);

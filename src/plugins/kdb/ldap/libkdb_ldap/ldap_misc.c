@@ -482,6 +482,156 @@ krb5_ldap_read_server_params(krb5_context context, char *conf_section,
             goto cleanup;
     }
 
+    st = prof_get_boolean_def (context, conf_section, srv_type,
+                              KRB5_CONF_LDAP_STARTTLS, FALSE,
+                              &ldap_context->starttls);
+    if (st)
+        goto cleanup;
+
+    if (ldap_context->auth_method == -1) {
+        st = prof_get_string_def (context, conf_section, srv_type,
+                                  KRB5_CONF_LDAP_AUTH_METHOD,
+                                  &tempval);
+        if (st)
+            goto cleanup;
+        if (tempval) {
+            if (!strcasecmp(tempval, "sasl")) {
+                ldap_context->auth_method = KRB5_LDAP_AUTH_SASL;
+            } else if (!strcasecmp(tempval, "none")) {
+                ldap_context->auth_method = KRB5_LDAP_AUTH_NONE;
+            } else if (!strcasecmp(tempval, "simple")) {
+                ldap_context->auth_method = KRB5_LDAP_AUTH_SIMPLE;
+            }
+            profile_release_string(tempval);
+        }
+        /* Not set, default simple auth */
+        if (ldap_context->auth_method == -1)
+            ldap_context->auth_method = KRB5_LDAP_AUTH_SIMPLE;
+    }
+
+    /*
+     * Read SASL params only if we are using SASL auth method
+     */
+    if(ldap_context->auth_method==KRB5_LDAP_AUTH_SASL) {
+        if (ldap_context->sasl_mech == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_SASL_MECH,
+                                      &ldap_context->sasl_mech);
+            if (st)
+                goto cleanup;
+        }
+
+        if (ldap_context->sasl_user == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_SASL_USER,
+                                      &ldap_context->sasl_user);
+            if (st)
+                goto cleanup;
+        }
+
+        if (ldap_context->sasl_auth_user == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_SASL_AUTH_USER,
+                                      &ldap_context->sasl_auth_user);
+            if (st)
+                goto cleanup;
+        }
+
+        if (ldap_context->sasl_realm == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_SASL_REALM,
+                                      &ldap_context->sasl_realm);
+            if (st)
+                goto cleanup;
+        }
+
+        if (ldap_context->sasl_secret == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_SASL_SECRET,
+                                      &ldap_context->sasl_secret);
+            if (st)
+                goto cleanup;
+        }
+
+        if (ldap_context->tls_cacert_file == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_TLS_CACERT_FILE,
+                                      &ldap_context->tls_cacert_file);
+            if (st)
+                goto cleanup;
+        }
+        if (ldap_context->tls_cacert_dir == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_TLS_CACERT_DIR,
+                                      &ldap_context->tls_cacert_dir);
+            if (st)
+                goto cleanup;
+        }
+
+        if (ldap_context->tls_cert_file == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_TLS_CERT_FILE,
+                                      &ldap_context->tls_cert_file);
+            if (st)
+                goto cleanup;
+        }
+
+        if (ldap_context->tls_cert_key_file == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_TLS_CERT_KEY_FILE,
+                                      &ldap_context->tls_cert_key_file);
+            if (st)
+                goto cleanup;
+        }
+
+        if (ldap_context->tls_reqcert == -1) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_TLS_REQCERT,
+                                      &tempval);
+            if (st)
+                goto cleanup;
+            if (tempval) {
+                if (!strcmp(tempval, "never"))
+                    ldap_context->tls_reqcert = LDAP_OPT_X_TLS_NEVER;
+                else if (!strcmp(tempval, "allow"))
+                    ldap_context->tls_reqcert = LDAP_OPT_X_TLS_ALLOW;
+                else if (!strcmp(tempval, "try"))
+                    ldap_context->tls_reqcert = LDAP_OPT_X_TLS_TRY;
+                else if (!strcmp(tempval, "demand"))
+                    ldap_context->tls_reqcert = LDAP_OPT_X_TLS_DEMAND;
+                else if (!strcmp(tempval, "hard"))
+                    ldap_context->tls_reqcert = LDAP_OPT_X_TLS_HARD;
+                profile_release_string(tempval);
+            }
+        }
+
+        if (ldap_context->tls_crl_file == NULL) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_TLS_CRL_FILE,
+                                      &ldap_context->tls_crl_file);
+            if (st)
+                goto cleanup;
+        }
+
+        if (ldap_context->tls_crlcheck == -1) {
+            st = prof_get_string_def (context, conf_section, srv_type,
+                                      KRB5_CONF_LDAP_TLS_CRLCHECK,
+                                      &tempval);
+            if (st)
+                goto cleanup;
+            if (tempval) {
+                if (!strcmp(tempval, "none"))
+                    ldap_context->tls_crlcheck = LDAP_OPT_X_TLS_CRL_NONE;
+                else if (!strcmp(tempval, "peer"))
+                    ldap_context->tls_crlcheck = LDAP_OPT_X_TLS_CRL_PEER;
+                else if (!strcmp(tempval, "all"))
+                    ldap_context->tls_crlcheck = LDAP_OPT_X_TLS_CRL_ALL;
+                profile_release_string(tempval);
+            }
+        }
+    }
+ 
+
     /*
      * If the ldap server parameter is not set read the list of ldap
      * servers from the database module section of the conf file.
@@ -582,15 +732,61 @@ krb5_ldap_free_server_context_params(krb5_ldap_context *ldap_context)
         ldap_context->service_password_file = NULL;
     }
 
-    if (ldap_context->certificates) {
-        i=0;
-        while (ldap_context->certificates[i] != NULL) {
-            free(ldap_context->certificates[i]->certificate);
-            free(ldap_context->certificates[i]);
-            ++i;
-        }
-        free(ldap_context->certificates);
+    ldap_context->auth_method = -1;
+
+    if (ldap_context->sasl_mech != NULL) {
+        free(ldap_context->sasl_mech);
+        ldap_context->sasl_mech = NULL;
     }
+
+    if (ldap_context->sasl_user != NULL) {
+        free(ldap_context->sasl_user);
+        ldap_context->sasl_user = NULL;
+    }
+
+    if (ldap_context->sasl_auth_user != NULL) {
+        free(ldap_context->sasl_auth_user);
+        ldap_context->sasl_auth_user = NULL;
+    }
+
+    if (ldap_context->sasl_realm != NULL) {
+        free(ldap_context->sasl_realm);
+        ldap_context->sasl_realm = NULL;
+    }
+
+    if (ldap_context->sasl_secret != NULL) {
+        free(ldap_context->sasl_secret);
+        ldap_context->sasl_secret = NULL;
+    }
+
+    if (ldap_context->tls_cacert_file != NULL) {
+        free(ldap_context->tls_cacert_file);
+        ldap_context->tls_cacert_file = NULL;
+    }
+
+    if (ldap_context->tls_cacert_dir != NULL) {
+        free(ldap_context->tls_cacert_dir);
+        ldap_context->tls_cacert_dir = NULL;
+    }
+
+    if (ldap_context->tls_cert_file != NULL) {
+        free(ldap_context->tls_cert_file);
+        ldap_context->tls_cert_file = NULL;
+    }
+
+    if (ldap_context->tls_cert_key_file != NULL) {
+        free(ldap_context->tls_cert_key_file);
+        ldap_context->tls_cert_key_file = NULL;
+    }
+
+    ldap_context->tls_reqcert = -1;
+
+    if (ldap_context->tls_crl_file != NULL) {
+        free(ldap_context->tls_crl_file);
+        ldap_context->tls_crl_file = NULL;
+    }
+
+    ldap_context->tls_crlcheck = -1;
 
     return(0);
 }
