@@ -15,6 +15,9 @@ _profile_free_list
 _profile_get_string
 _profile_get_boolean
 _profile_get_integer
+_profile_get_string_by_path
+_profile_get_boolean_by_path
+_profile_get_integer_by_path
 _profile_get_relation_names
 _profile_get_subsection_names
 _profile_iterator_create

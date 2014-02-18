@@ -91,6 +91,18 @@ long KRB5_CALLCONV profile_get_boolean
 			const char *subsubname, int def_val,
 			int *ret_default);
 
+long KRB5_CALLCONV profile_get_string_by_path
+	(profile_t profile, const char **path,
+			const char *def_val, char **ret_string);
+
+long KRB5_CALLCONV profile_get_integer_by_path
+	(profile_t profile, const char **path,
+			int def_val, int *ret_default);
+
+long KRB5_CALLCONV profile_get_boolean_by_path
+	(profile_t profile, const char **path,
+			int def_val, int *ret_default);
+
 long KRB5_CALLCONV profile_get_relation_names
 	(profile_t profile, const char **names, char ***ret_names);
 

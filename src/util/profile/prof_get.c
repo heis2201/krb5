@@ -398,6 +398,91 @@ profile_get_boolean(profile_t profile, const char *name, const char *subname,
     return retval;
 }
 
+errcode_t KRB5_CALLCONV
+profile_get_string_by_path(profile_t profile, const char **path,
+                    const char *def_val, char **ret_string)
+{
+    char            *value;
+    errcode_t       retval;
+
+    if (profile) {
+        retval = profile_get_value(profile, path, &value);
+        if (retval == 0) {
+            *ret_string = value;
+            return 0;
+        } else if (retval != PROF_NO_SECTION && retval != PROF_NO_RELATION)
+            return retval;
+    }
+
+    if (def_val) {
+        *ret_string = strdup(def_val);
+        if (*ret_string == NULL)
+            return ENOMEM;
+    } else
+        *ret_string = NULL;
+    return 0;
+}
+
+errcode_t KRB5_CALLCONV
+profile_get_integer_by_path(profile_t profile,  const char **path,
+                        int def_val, int *ret_int)
+{
+    const char      *value;
+    errcode_t       retval;
+    char            *end_value;
+    long            ret_long;
+    retval = profile_get_value(profile, path, &value);
+    if (retval == PROF_NO_SECTION || retval == PROF_NO_RELATION) {
+        *ret_int = def_val;
+        return 0;
+    } else if (retval)
+        return retval;
+
+    if (value[0] == 0)
+        /* Empty string is no good.  */
+        return PROF_BAD_INTEGER;
+    errno = 0;
+    ret_long = strtol (value, &end_value, 10);
+
+    /* Overflow or underflow.  */
+    if ((ret_long == LONG_MIN || ret_long == LONG_MAX) && errno != 0)
+        return PROF_BAD_INTEGER;
+    /* Value outside "int" range.  */
+    if ((long) (int) ret_long != ret_long)
+        return PROF_BAD_INTEGER;
+    /* Garbage in string.  */
+    if (end_value != value + strlen (value))
+        return PROF_BAD_INTEGER;
+
+    *ret_int = ret_long;
+    return 0;
+
+}
+
+errcode_t KRB5_CALLCONV
+profile_get_boolean_by_path(profile_t profile,  const char **path,
+                int def_val, int *ret_boolean)
+{
+    char            *value;
+    errcode_t       retval;
+
+    if (profile == 0) {
+        *ret_boolean = def_val;
+        return 0;
+    }
+
+    retval = profile_get_value(profile, path, &value);
+    if (retval == PROF_NO_SECTION || retval == PROF_NO_RELATION) {
+        *ret_boolean = def_val;
+        return 0;
+    } else if (retval)
+        return retval;
+
+    retval = profile_parse_boolean(value, ret_boolean);
+    free(value);
+    return retval;
+}
+
 /*
  * This function will return the list of the names of subections in the
  * under the specified section name.
