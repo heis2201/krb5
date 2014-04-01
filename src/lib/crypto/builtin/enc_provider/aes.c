@@ -365,6 +365,36 @@ krb5int_aes_decrypt(krb5_key key, const krb5_data *ivec, krb5_crypto_iov *data,
     return 0;
 }
 
+krb5_error_code
+krb5int_aes_cbc_mac(krb5_key key, const krb5_crypto_iov *data,
+                    size_t num_data, const krb5_data *ivec,
+                    krb5_data *output)
+{
+    unsigned char iv[BLOCK_SIZE], block[BLOCK_SIZE];
+    struct iov_cursor cursor;
+
+    if (output->length < BLOCK_SIZE)
+        return KRB5_BAD_MSIZE;
+
+    if (init_key_cache(key))
+        return ENOMEM;
+    expand_enc_key(key);
+
+    if (ivec != NULL)
+        memcpy(iv, ivec->data, BLOCK_SIZE);
+    else
+        memset(iv, 0, BLOCK_SIZE);
+
+    k5_iov_cursor_init(&cursor, data, num_data, BLOCK_SIZE, FALSE);
+    while (k5_iov_cursor_get(&cursor, block))
+        cbc_enc(key, block, 1, iv);
+
+    output->length = BLOCK_SIZE;
+    memcpy(output->data, iv, BLOCK_SIZE);
+
+    return 0;
+}
+
 static krb5_error_code
 aes_init_state(const krb5_keyblock *key, krb5_keyusage usage,
                krb5_data *state)
@@ -388,7 +418,7 @@ const struct krb5_enc_provider krb5int_enc_aes128 = {
     16, 16,
     krb5int_aes_encrypt,
     krb5int_aes_decrypt,
-    NULL,
+    krb5int_aes_cbc_mac,
     aes_init_state,
     krb5int_default_free_state,
     aes_key_cleanup

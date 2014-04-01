@@ -167,6 +167,18 @@ const struct krb5_keytypes krb5int_enctypes_list[] = {
       krb5int_dk_cmac_prf,
       CKSUMTYPE_CMAC_CAMELLIA256,
       0 /*flags */ },
+
+    { ENCTYPE_AES128_CTS_CMAC,
+      "aes128-cts-cmac", { 0 },
+      "AES-128 CTS mode with CMAC",
+      &krb5int_enc_aes128, NULL,
+      16,
+      krb5int_camellia_crypto_length,
+      krb5int_dk_cmac_encrypt, krb5int_dk_cmac_decrypt,
+      krb5int_camellia_string_to_key, k5_rand2key_direct,
+      krb5int_dk_cmac_prf,
+      CKSUMTYPE_CMAC_CAMELLIA128,
+      0 /*flags*/ },
 };
 
 const int krb5int_enctypes_length =
