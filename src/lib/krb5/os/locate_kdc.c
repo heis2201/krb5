@@ -166,12 +166,45 @@ add_host_to_list(struct serverlist *list, const char *hostname, int port,
     return 0;
 }
 
+/* Look up the entries for name within the realm config section for realm, in
+ * the profile for context.  Free the result with profile_free_list. */
+static krb5_error_code
+get_realm_config(krb5_context context, const krb5_data *realm,
+                 const char *name, char ***list_out)
+{
+    krb5_error_code ret;
+    const char *names[4];
+    char *realmstr;
+
+    realmstr = k5memdup0(realm->data, realm->length, &ret);
+    if (realmstr == NULL)
+        return ret;
+    names[0] = KRB5_CONF_REALMS;
+    names[1] = realmstr;
+    names[2] = name;
+    names[3] = 0;
+    ret = profile_get_values(context->profile, names, list_out);
+    free(realmstr);
+    return ret;
+}
+
+/* Return true if the profile has regular KDC entries for realm. */
+static krb5_boolean
+kdc_entries_in_profile(krb5_context context, const krb5_data *realm)
+{
+    char **list;
+
+    if (get_realm_config(context, realm, KRB5_CONF_KDC, &list) != 0)
+        return FALSE;
+    profile_free_list(list);
+    return TRUE;
+}
+
 static krb5_error_code
 locate_srv_conf_1(krb5_context context, const krb5_data *realm,
                   const char * name, struct serverlist *serverlist,
                   int socktype, int udpport, int sec_udpport)
 {
-    const char  *realm_srv_names[4];
     char **hostlist, *host, *port, *cp;
     krb5_error_code code;
     int i;
@@ -179,21 +212,7 @@ locate_srv_conf_1(krb5_context context, const krb5_data *realm,
     Tprintf ("looking in krb5.conf for realm %s entry %s; ports %d,%d\n",
              realm->data, name, ntohs (udpport), ntohs (sec_udpport));
 
-    if ((host = malloc(realm->length + 1)) == NULL)
-        return ENOMEM;
-
-    strncpy(host, realm->data, realm->length);
-    host[realm->length] = '\0';
-    hostlist = 0;
-
-    realm_srv_names[0] = KRB5_CONF_REALMS;
-    realm_srv_names[1] = host;
-    realm_srv_names[2] = name;
-    realm_srv_names[3] = 0;
-
-    code = profile_get_values(context->profile, realm_srv_names, &hostlist);
-    free(host);
-
+    code = get_realm_config(context, realm, name, &hostlist);
     if (code) {
         Tprintf ("config file lookup failed: %s\n",
                  error_message(code));
@@ -561,7 +580,11 @@ k5_locate_server(krb5_context context, const krb5_data *realm,
         code = prof_locate_server(context, realm, &al, svc, socktype);
 
 #ifdef KRB5_DNS_LOOKUP
-        if (code == 0 && al.nservers == 0)
+        /* Fall back to DNS if there are no profile entries, but not for
+         * master_kdc if there are kdc entries in the profile. */
+        if (code == 0 && al.nservers == 0 &&
+            !(svc == locate_service_master_kdc &&
+              kdc_entries_in_profile(context, realm)))
             code = dns_locate_server(context, realm, &al, svc, socktype);
 #endif /* KRB5_DNS_LOOKUP */
 
