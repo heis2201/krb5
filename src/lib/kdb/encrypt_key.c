@@ -115,7 +115,10 @@ krb5_dbe_def_encrypt_key_data( krb5_context             context,
         if (keysalt->type > 0) {
             key_data->key_data_ver++;
             key_data->key_data_type[1] = keysalt->type;
-            if ((key_data->key_data_length[1] = keysalt->data.length) != 0) {
+            /* We only need to store the value for SALTTYPE_SPECIAL; the other
+             * non-default salt types can be computed from the principal. */
+            if (keysalt->type == KRB5_KDB_SALTTYPE_SPECIAL &&
+                (key_data->key_data_length[1] = keysalt->data.length) != 0) {
                 key_data->key_data_contents[1] =
                     (krb5_octet *)malloc(keysalt->data.length);
                 if (key_data->key_data_contents[1] == NULL) {
