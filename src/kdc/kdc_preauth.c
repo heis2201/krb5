@@ -462,6 +462,36 @@ max_time_skew(krb5_context context, krb5_kdcpreauth_rock rock)
     return context->clockskew;
 }
 
+/*
+ * Find the key data entry in client for the most preferred enctype in
+ * request's enctype list, looking only at keys of the most recent kvno.  Set
+ * *kd_out to the key data entry (using an alias pointer) and *etype_out to the
+ * corresponding request enctype.  *etype_out may not exactly match the enctype
+ * of *kd_out for DES enctypes.  Return ENOENT if no key can be found.
+ */
+static krb5_error_code
+preferred_key_data(krb5_context context, krb5_db_entry *client,
+                   const krb5_kdc_req *request, krb5_key_data **kd_out,
+                   krb5_enctype *etype_out)
+{
+    int i;
+    krb5_key_data *kd;
+    krb5_enctype etype;
+
+    *kd_out = NULL;
+    *etype_out = ENCTYPE_NULL;
+
+    for (i = 0; i < request->nktypes; i++) {
+        etype = request->ktype[i];
+        if (krb5_dbe_find_enctype(context, client, etype, -1, 0, &kd) == 0) {
+            *kd_out = kd;
+            *etype_out = etype;
+            return 0;
+        }
+    }
+    return ENOENT;
+}
+
 static krb5_error_code
 client_keys(krb5_context context, krb5_kdcpreauth_rock rock,
             krb5_keyblock **keys_out)
@@ -1288,17 +1318,6 @@ cleanup:
     return (retval);
 }
 
-static krb5_boolean
-request_contains_enctype(krb5_context context,  const krb5_kdc_req *request,
-                         krb5_enctype enctype)
-{
-    int i;
-    for (i =0; i < request->nktypes; i++)
-        if (request->ktype[i] == enctype)
-            return 1;
-    return 0;
-}
-
 static krb5_error_code
 _make_etype_info_entry(krb5_context context,
                        krb5_principal client_princ, krb5_key_data *client_key,
@@ -1353,8 +1372,11 @@ cleanup:
     return retval;
 }
 
-/* Create etype information for a client for the preauth-required hint list,
- * for either etype-info or etype-info2. */
+/*
+ * Create etype information for a client for the preauth-required hint list,
+ * for either etype-info or etype-info2.  Since we know the supported client
+ * enctypes, we can send only a single entry to the client.
+ */
 static void
 etype_info_helper(krb5_context context, krb5_kdc_req *request,
                   krb5_db_entry *client, krb5_preauthtype pa_type,
@@ -1365,68 +1387,20 @@ etype_info_helper(krb5_context context, krb5_kdc_req *request,
     krb5_etype_info_entry **entry = NULL;
     krb5_data *scratch = NULL;
     krb5_key_data *client_key;
-    krb5_enctype db_etype;
-    int i = 0, start = 0, seen_des = 0;
+    krb5_enctype etype;
     int etype_info2 = (pa_type == KRB5_PADATA_ETYPE_INFO2);
 
-    entry = k5calloc(client->n_key_data * 2 + 1, sizeof(*entry), &retval);
+    retval = preferred_key_data(context, client, request, &client_key, &etype);
+    if (retval)
+        goto cleanup;
+
+    /* Create the entry array. */
+    entry = k5calloc(2, sizeof(*entry), &retval);
     if (entry == NULL)
         goto cleanup;
-    entry[0] = NULL;
-
-    while (1) {
-        retval = krb5_dbe_search_enctype(context, client, &start, -1,
-                                         -1, 0, &client_key);
-        if (retval == KRB5_KDB_NO_MATCHING_KEY)
-            break;
-        if (retval)
-            goto cleanup;
-        db_etype = client_key->key_data_type[0];
-        if (db_etype == ENCTYPE_DES_CBC_MD4)
-            db_etype = ENCTYPE_DES_CBC_MD5;
-
-        if (request_contains_enctype(context, request, db_etype)) {
-            assert(etype_info2 ||
-                   !enctype_requires_etype_info_2(db_etype));
-            retval = _make_etype_info_entry(context, client->princ, client_key,
-                                            db_etype, &entry[i], etype_info2);
-            if (retval != 0)
-                goto cleanup;
-            i++;
-        }
-
-        /*
-         * If there is a des key in the kdb, try the "similar" enctypes,
-         * avoid duplicate entries.
-         */
-        if (!seen_des) {
-            switch (db_etype) {
-            case ENCTYPE_DES_CBC_MD5:
-                db_etype = ENCTYPE_DES_CBC_CRC;
-                break;
-            case ENCTYPE_DES_CBC_CRC:
-                db_etype = ENCTYPE_DES_CBC_MD5;
-                break;
-            default:
-                continue;
-
-            }
-            if (krb5_is_permitted_enctype(context, db_etype) &&
-                request_contains_enctype(context, request, db_etype)) {
-                retval = _make_etype_info_entry(context, client->princ,
-                                                client_key, db_etype,
-                                                &entry[i], etype_info2);
-                if (retval != 0)
-                    goto cleanup;
-                entry[i+1] = 0;
-                i++;
-            }
-            seen_des++;
-        }
-    }
-
-    /* If the list is empty, don't send it at all. */
-    if (i == 0)
+    retval = _make_etype_info_entry(context, client->princ, client_key,
+                                    etype, &entry[0], etype_info2);
+    if (retval != 0)
         goto cleanup;
 
     if (etype_info2)
