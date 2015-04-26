@@ -34,6 +34,9 @@
 #include "int-proto.h"
 #include "auth_con.h"
 
+int k5_curve25519_donna(uint8_t *, const uint8_t *, const uint8_t *);
+static const uint8_t basepoint[32] = {9};
+
 /*
   Formats a KRB_AP_REQ message into outbuf, with more complete options than
   krb_mk_req.
@@ -74,12 +77,16 @@ make_etype_list(krb5_context context,
                 krb5_authdata ***authdata);
 
 static krb5_error_code
+add_x25519(krb5_context context, const uint8_t *x25519,
+           krb5_authdata ***authdata);
+
+static krb5_error_code
 generate_authenticator(krb5_context,
                        krb5_authenticator *, krb5_principal,
                        krb5_checksum *, krb5_key,
                        krb5_ui_4, krb5_authdata **,
                        krb5_authdata_context ad_context,
-                       krb5_enctype *desired_etypes,
+                       krb5_enctype *desired_etypes, const uint8_t *x25519,
                        krb5_enctype tkt_enctype);
 
 /* Return the checksum type for the AP request, or 0 to use the enctype's
@@ -126,6 +133,9 @@ krb5_mk_req_extended(krb5_context context, krb5_auth_context *auth_context,
     krb5_ap_req request;
     krb5_data *scratch = 0;
     krb5_data *toutbuf;
+    uint8_t x25519buf[32];
+    const uint8_t *x25519pub = NULL;
+    krb5_data x25519d;
 
     request.ap_options = ap_req_options & AP_OPTS_WIRE_MASK;
     request.authenticator.ciphertext.data = NULL;
@@ -135,6 +145,10 @@ krb5_mk_req_extended(krb5_context context, krb5_auth_context *auth_context,
         return(KRB5_NO_TKT_SUPPLIED);
 
     if ((ap_req_options & AP_OPTS_ETYPE_NEGOTIATION) &&
+        !(ap_req_options & AP_OPTS_MUTUAL_REQUIRED))
+        return(EINVAL);
+
+    if ((ap_req_options & AP_OPTS_X25519) &&
         !(ap_req_options & AP_OPTS_MUTUAL_REQUIRED))
         return(EINVAL);
 
@@ -228,6 +242,20 @@ krb5_mk_req_extended(krb5_context context, krb5_auth_context *auth_context,
             desired_etypes = (*auth_context)->permitted_etypes;
     }
 
+    if (ap_req_options & AP_OPTS_X25519) {
+        /* XXX helper to make secret */
+        x25519d = make_data((*auth_context)->x25519, 32);
+        retval = krb5_c_random_make_octets(context, &x25519d);
+        if (retval)
+            goto cleanup_cksum;
+        (*auth_context)->x25519[0] &= 248;
+        (*auth_context)->x25519[31] &= 127;
+        (*auth_context)->x25519[31] |= 64;
+        (*auth_context)->x25519_set = TRUE;
+        k5_curve25519_donna(x25519buf, (*auth_context)->x25519, basepoint);
+        x25519pub = x25519buf;
+    }
+
     TRACE_MK_REQ(context, in_creds, (*auth_context)->local_seq_number,
                  (*auth_context)->send_subkey, &in_creds->keyblock);
     if ((retval = generate_authenticator(context,
@@ -237,7 +265,7 @@ krb5_mk_req_extended(krb5_context context, krb5_auth_context *auth_context,
                                          (*auth_context)->local_seq_number,
                                          in_creds->authdata,
                                          (*auth_context)->ad_context,
-                                         desired_etypes,
+                                         desired_etypes, x25519pub,
                                          in_creds->keyblock.enctype)))
         goto cleanup_cksum;
 
@@ -294,7 +322,7 @@ generate_authenticator(krb5_context context, krb5_authenticator *authent,
                        krb5_key key, krb5_ui_4 seq_number,
                        krb5_authdata **authorization,
                        krb5_authdata_context ad_context,
-                       krb5_enctype *desired_etypes,
+                       krb5_enctype *desired_etypes, const uint8_t *x25519pub,
                        krb5_enctype tkt_enctype)
 {
     krb5_error_code retval;
@@ -337,6 +365,12 @@ generate_authenticator(krb5_context context, krb5_authenticator *authent,
         TRACE_MK_REQ_ETYPES(context, desired_etypes);
         retval = make_etype_list(context, desired_etypes, tkt_enctype,
                                  &authent->authorization_data);
+        if (retval)
+            return retval;
+    }
+
+    if (x25519pub != NULL) {
+        retval = add_x25519(context, x25519pub, &authent->authorization_data);
         if (retval)
             return retval;
     }
@@ -426,5 +460,31 @@ make_etype_list(krb5_context context,
 
     adata[i + 1] = NULL;
 
+    return 0;
+}
+
+static krb5_error_code
+add_x25519(krb5_context context, const uint8_t *x25519pub,
+           krb5_authdata ***authdata)
+{
+    krb5_error_code ret;
+    krb5_authdata ad, *list[2], **ifr, **merged;
+
+    ad.ad_type = KRB5_AUTHDATA_X25519;
+    ad.contents = (uint8_t *)x25519pub;
+    ad.length = 32;
+    list[0] = &ad;
+    list[1] = NULL;
+    ret = krb5_encode_authdata_container(context, KRB5_AUTHDATA_IF_RELEVANT,
+                                         list, &ifr);
+    if (ret)
+        return ret;
+    /* XXX wasteful, deep-copies *authdata and ifr */
+    ret = krb5_merge_authdata(context, *authdata, ifr, &merged);
+    krb5_free_authdata(context, ifr);
+    if (ret)
+        return ret;
+    krb5_free_authdata(context, *authdata);
+    *authdata = merged;
     return 0;
 }

@@ -54,6 +54,8 @@
 #include "k5-int.h"
 #include "auth_con.h"
 
+int k5_curve25519_donna(uint8_t *, const uint8_t *, const uint8_t *);
+
 /*
  *  Parses a KRB_AP_REP message, returning its contents.
  *
@@ -73,6 +75,9 @@ krb5_rd_rep(krb5_context context, krb5_auth_context auth_context,
     krb5_ap_rep          *reply = NULL;
     krb5_ap_rep_enc_part *enc = NULL;
     krb5_data             scratch;
+    krb5_keyblock        *subkey, x25519kb;
+    size_t                len;
+    uint8_t               x25519shared[32];
 
     *repl = NULL;
 
@@ -112,12 +117,26 @@ krb5_rd_rep(krb5_context context, krb5_auth_context auth_context,
 
     /* Set auth subkey. */
     if (enc->subkey) {
-        retval = krb5_auth_con_setrecvsubkey(context, auth_context,
-                                             enc->subkey);
+        if (enc->subkey->length == 38 &&
+            memcmp(enc->subkey->contents, "X25519", 6) == 0) {
+            /* XXX awful dirty hack; also should hash shared. */
+            k5_curve25519_donna(x25519shared, auth_context->x25519,
+                                enc->subkey->contents + 6);
+            x25519kb.magic = KV5M_KEYBLOCK;
+            x25519kb.enctype = enc->subkey->enctype;
+            retval = krb5_c_keylengths(context, x25519kb.enctype, NULL, &len);
+            if (retval)
+                goto clean_scratch;
+            x25519kb.length = len;
+            x25519kb.contents = x25519shared;
+            subkey = &x25519kb;
+        } else {
+            subkey = enc->subkey;
+        }
+        retval = krb5_auth_con_setrecvsubkey(context, auth_context, subkey);
         if (retval)
             goto clean_scratch;
-        retval = krb5_auth_con_setsendsubkey(context, auth_context,
-                                             enc->subkey);
+        retval = krb5_auth_con_setsendsubkey(context, auth_context, subkey);
         if (retval) {
             (void) krb5_auth_con_setrecvsubkey(context, auth_context, NULL);
             goto clean_scratch;

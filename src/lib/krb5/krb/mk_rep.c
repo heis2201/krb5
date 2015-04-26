@@ -55,6 +55,51 @@
 #include "int-proto.h"
 #include "auth_con.h"
 
+int k5_curve25519_donna(uint8_t *, const uint8_t *, const uint8_t *);
+static const uint8_t basepoint[32] = {9};
+
+static krb5_error_code
+generate_x25519_key(krb5_context context, krb5_auth_context auth_context,
+                    uint8_t *pub_out)
+{
+    krb5_error_code ret;
+    uint8_t pvt[32], shared[32];
+    krb5_data d;
+    krb5_keyblock kb;
+    size_t keylen;
+
+    d = make_data(pvt, 32);
+    ret = krb5_c_random_make_octets(context, &d);
+    if (ret)
+        return ret;
+    pvt[0] &= 248;
+    pvt[31] &= 127;
+    pvt[31] |= 64;
+
+    k5_curve25519_donna(shared, pvt, auth_context->x25519);
+
+    /* XXX should hash the result or PRF+ the existing key */
+    kb.magic = KV5M_KEYBLOCK;
+    kb.enctype = auth_context->negotiated_etype;
+    ret = krb5_c_keylengths(context, kb.enctype, NULL, &keylen);
+    if (ret)
+        return ret;
+    kb.length = keylen;
+    kb.contents = shared;
+
+    ret = krb5_auth_con_setsendsubkey(context, auth_context, &kb);
+    if (ret)
+        return ret;
+    ret = krb5_auth_con_setrecvsubkey(context, auth_context, &kb);
+    if (ret) {
+        (void)krb5_auth_con_setsendsubkey(context, auth_context, NULL);
+        return ret;
+    }
+
+    k5_curve25519_donna(pub_out, pvt, basepoint);
+    return 0;
+}
+
 /*
   Formats a KRB_AP_REP message into outbuf.
 
@@ -73,6 +118,8 @@ k5_mk_rep(krb5_context context, krb5_auth_context auth_context,
     krb5_ap_rep           reply;
     krb5_data           * scratch;
     krb5_data           * toutbuf;
+    uint8_t               x25519pub[38];
+    krb5_keyblock         x25519k;
 
     /* Make the reply */
     if (((auth_context->auth_context_flags & KRB5_AUTH_CONTEXT_DO_SEQUENCE) ||
@@ -91,9 +138,21 @@ k5_mk_rep(krb5_context context, krb5_auth_context auth_context,
         repl.cusec = auth_context->authentp->cusec;
     }
 
-    if (dce_style)
+    if (dce_style) {
         repl.subkey = NULL;
-    else if (auth_context->auth_context_flags & KRB5_AUTH_CONTEXT_USE_SUBKEY) {
+    } else if (auth_context->x25519_set) {
+        retval = generate_x25519_key(context, auth_context, x25519pub + 6);
+        if (retval)
+            return retval;
+        /* XXX awful dirty hack */
+        memcpy(x25519pub, "X25519", 6);
+        x25519k.magic = KV5M_KEYBLOCK;
+        x25519k.enctype = auth_context->negotiated_etype;
+        x25519k.length = 38;
+        x25519k.contents = x25519pub;
+        repl.subkey = &x25519k;
+    } else if (auth_context->auth_context_flags &
+               KRB5_AUTH_CONTEXT_USE_SUBKEY) {
         assert(auth_context->negotiated_etype != ENCTYPE_NULL);
 
         retval = k5_generate_and_save_subkey(context, auth_context,

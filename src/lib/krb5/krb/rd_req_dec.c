@@ -77,6 +77,9 @@ decode_etype_list(krb5_context context,
                   krb5_enctype **desired_etypes,
                   int *desired_etypes_len);
 static krb5_error_code
+decode_x25519(krb5_context context, const krb5_authenticator *auth,
+              uint8_t *x25519_out, krb5_boolean *x25519_set_out);
+static krb5_error_code
 negotiate_etype(krb5_context context,
                 const krb5_enctype *desired_etypes,
                 int desired_etypes_len,
@@ -666,6 +669,12 @@ rd_req_decoded_opt(krb5_context context, krb5_auth_context *auth_context,
     if (retval != 0)
         goto cleanup;
 
+    retval = decode_x25519(context, (*auth_context)->authentp,
+                           (*auth_context)->x25519,
+                           &(*auth_context)->x25519_set);
+    if (retval != 0)
+        goto cleanup;
+
     if (desired_etypes == NULL)
         desired_etypes = (krb5_enctype *)calloc(4, sizeof(krb5_enctype));
     else
@@ -778,6 +787,8 @@ rd_req_decoded_opt(krb5_context context, krb5_auth_context *auth_context,
         *ap_req_options = req->ap_options & AP_OPTS_WIRE_MASK;
         if (rfc4537_etypes_len != 0)
             *ap_req_options |= AP_OPTS_ETYPE_NEGOTIATION;
+        if ((*auth_context)->x25519_set)
+            *ap_req_options |= AP_OPTS_X25519;
         if ((*auth_context)->negotiated_etype !=
             krb5_k_key_enctype(context, (*auth_context)->key))
             *ap_req_options |= AP_OPTS_USE_SUBKEY;
@@ -986,4 +997,23 @@ decode_etype_list(krb5_context context,
         krb5_free_authdata(context, ad_if_relevant);
 
     return code;
+}
+
+static krb5_error_code
+decode_x25519(krb5_context context, const krb5_authenticator *auth,
+              uint8_t *x25519_out, krb5_boolean *x25519_set_out)
+{
+    krb5_error_code ret;
+    krb5_authdata **list;
+
+    ret = krb5_find_authdata(context, NULL, auth->authorization_data,
+                             KRB5_AUTHDATA_X25519, &list);
+    if (ret)
+        return ret;
+    if (list != NULL && list[0] != NULL && list[0]->length == 32) {
+        memcpy(x25519_out, list[0]->contents, 32);
+        *x25519_set_out = TRUE;
+    }
+    krb5_free_authdata(context, list);
+    return 0;
 }

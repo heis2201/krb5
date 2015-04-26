@@ -34,6 +34,7 @@ STLIBOBJS= \
 	copy_princ.o	\
 	copy_tick.o	\
 	cp_key_cnt.o	\
+	curve25519-donna-c64.o \
 	decode_kdc.o	\
 	decrypt_tk.o	\
 	deltat.o	\
@@ -143,6 +144,7 @@ OBJS=	$(OUTPRE)addr_comp.$(OBJEXT)	\
 	$(OUTPRE)copy_princ.$(OBJEXT)	\
 	$(OUTPRE)copy_tick.$(OBJEXT)	\
 	$(OUTPRE)cp_key_cnt.$(OBJEXT)	\
+	$(OUTPRE)curve25519-donna-c64.$(OBJEXT) \
 	$(OUTPRE)decode_kdc.$(OBJEXT)	\
 	$(OUTPRE)decrypt_tk.$(OBJEXT)	\
 	$(OUTPRE)deltat.$(OBJEXT)	\
@@ -252,6 +254,7 @@ SRCS=	$(srcdir)/addr_comp.c	\
 	$(srcdir)/copy_princ.c	\
 	$(srcdir)/copy_tick.c	\
 	$(srcdir)/cp_key_cnt.c	\
+	$(srcdir)/curve25519-donna-c64.c \
 	$(srcdir)/decode_kdc.c	\
 	$(srcdir)/decrypt_tk.c	\
 	$(srcdir)/deltat.c	\

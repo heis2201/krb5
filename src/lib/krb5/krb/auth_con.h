@@ -26,6 +26,9 @@ struct _krb5_auth_context {
     void *checksum_func_data;
     krb5_enctype        negotiated_etype;
     krb5_authdata_context   ad_context;
+    /* Contains private value for mk_req, client's public value for rd_req */
+    uint8_t             x25519[32];
+    krb5_boolean        x25519_set;
 };
 
 

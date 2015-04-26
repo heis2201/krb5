@@ -20,6 +20,9 @@ TEST_PREFIX = "foo bar"
 KADMIN_OPTS= -d $(TEST_DB) -r $(TEST_REALM) -P $(TEST_MKEY)
 KTEST_OPTS= $(KADMIN_OPTS) -p $(TEST_PREFIX) -n $(TEST_NUM) -D $(TEST_DEPTH)
 
+acontime: acontime.o $(KRB5_BASE_DEPLIBS)
+	$(CC_LINK) -o $@ acontime.o $(KRB5_BASE_LIBS)
+
 gcred: gcred.o $(KRB5_BASE_DEPLIBS)
 	$(CC_LINK) -o $@ gcred.o $(KRB5_BASE_LIBS)
 
