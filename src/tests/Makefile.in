@@ -20,6 +20,9 @@ TEST_PREFIX = "foo bar"
 KADMIN_OPTS= -d $(TEST_DB) -r $(TEST_REALM) -P $(TEST_MKEY)
 KTEST_OPTS= $(KADMIN_OPTS) -p $(TEST_PREFIX) -n $(TEST_NUM) -D $(TEST_DEPTH)
 
+cryperf: cryperf.o curve25519-donna-c64.o $(KRB5_BASE_DEPLIBS)
+	$(CC_LINK) -o $@ cryperf.o curve25519-donna-c64.o $(KRB5_BASE_LIBS) -lcrypto
+
 gcred: gcred.o $(KRB5_BASE_DEPLIBS)
 	$(CC_LINK) -o $@ gcred.o $(KRB5_BASE_LIBS)
 
