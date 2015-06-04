@@ -589,8 +589,28 @@ have_client_keys(krb5_context context, krb5_kdcpreauth_rock rock)
     return FALSE;
 }
 
+static krb5_error_code
+preferred_client_key(krb5_context context, krb5_kdcpreauth_rock rock,
+                     krb5_keyblock *key_out)
+{
+    krb5_error_code ret;
+    krb5_key_data *kd;
+    krb5_enctype etype;
+
+    memset(key_out, 0, sizeof(*key_out));
+    ret = preferred_key_data(context, rock->client, rock->request, &kd,
+                             &etype);
+    if (ret)
+        return ret;
+    ret = krb5_dbe_decrypt_key_data(context, NULL, kd, key_out, NULL);
+    if (ret)
+        return ret;
+    key_out->enctype = etype;
+    return 0;
+}
+
 static struct krb5_kdcpreauth_callbacks_st callbacks = {
-    2,
+    3,
     max_time_skew,
     client_keys,
     free_keys,
@@ -600,7 +620,8 @@ static struct krb5_kdcpreauth_callbacks_st callbacks = {
     free_string,
     client_entry,
     event_context,
-    have_client_keys
+    have_client_keys,
+    preferred_client_key
 };
 
 static krb5_error_code

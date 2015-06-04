@@ -181,6 +181,17 @@ typedef struct krb5_kdcpreauth_callbacks_st {
 
     /* End of version 2 kdcpreauth callbacks. */
 
+    /*
+     * Fill in *key_out with the client key for the request's most preferred
+     * enctype.  Returns ENOENT if no key is present.  Free the result with
+     * krb5_free_keyblock_contents().
+     */
+    krb5_error_code (*preferred_client_key)(krb5_context context,
+                                            krb5_kdcpreauth_rock rock,
+                                            krb5_keyblock *key_out);
+
+    /* End of version 3 kdcpreauth callbacks. */
+
 } *krb5_kdcpreauth_callbacks;
 
 /* Optional: preauth plugin initialization function. */
