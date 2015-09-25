@@ -23,6 +23,7 @@ SUBDIRS=util include lib \
 	plugins/kdb/test \
 	plugins/preauth/otp \
 	plugins/preauth/pkinit \
+	plugins/preauth/spake \
 	plugins/preauth/test \
 	plugins/tls/k5tls \
 	kdc kadmin slave clients appl tests \
