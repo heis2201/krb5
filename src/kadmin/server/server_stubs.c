@@ -21,6 +21,8 @@ extern gss_name_t                       gss_changepw_name;
 extern gss_name_t                       gss_oldchangepw_name;
 extern void *                           global_server_handle;
 
+extern void ipropx_notify_clients(krb5_context context);
+
 #define CHANGEPW_SERVICE(rqstp)                                         \
     (cmp_gss_names_rel_1(acceptor_name(rqstp->rq_svccred), gss_changepw_name) | \
      (gss_oldchangepw_name &&                                           \
@@ -386,6 +388,7 @@ create_principal_2_svc(cprinc_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &service_name);
 
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -448,6 +451,7 @@ create_principal3_2_svc(cprinc3_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &service_name);
 
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -505,6 +509,7 @@ delete_principal_2_svc(dprinc_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &service_name);
 
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -562,6 +567,7 @@ modify_principal_2_svc(mprinc_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -660,6 +666,7 @@ rename_principal_2_svc(rprinc_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -843,6 +850,7 @@ chpass_principal_2_svc(chpass_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -912,6 +920,7 @@ chpass_principal3_2_svc(chpass3_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -972,6 +981,7 @@ setv4key_principal_2_svc(setv4key_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -1032,6 +1042,7 @@ setkey_principal_2_svc(setkey_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -1095,6 +1106,7 @@ setkey_principal3_2_svc(setkey3_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -1167,6 +1179,7 @@ chrand_principal_2_svc(chrand_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -1244,6 +1257,7 @@ chrand_principal3_2_svc(chrand3_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -1298,6 +1312,7 @@ create_policy_2_svc(cpol_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    /* XXX - iprop does not support policy updates */
     free_server_handle(handle);
     return &ret;
 }
@@ -1350,6 +1365,7 @@ delete_policy_2_svc(dpol_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    /* XXX - iprop does not support policy updates */
     free_server_handle(handle);
     return &ret;
 }
@@ -1403,6 +1419,7 @@ modify_policy_2_svc(mpol_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    /* XXX - iprop does not support policy updates */
     free_server_handle(handle);
     return &ret;
 }
@@ -1632,6 +1649,7 @@ purgekeys_2_svc(purgekeys_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }
@@ -1747,6 +1765,7 @@ set_string_2_svc(sstring_arg *arg, struct svc_req *rqstp)
     gss_release_buffer(&minor_stat, &client_name);
     gss_release_buffer(&minor_stat, &service_name);
 exit_func:
+    ipropx_notify_clients(handle->context);
     free_server_handle(handle);
     return &ret;
 }

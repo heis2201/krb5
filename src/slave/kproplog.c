@@ -330,19 +330,24 @@ print_attr(kdbe_val_t *val, int vverbose)
  * Print the update entry information
  */
 static void
-print_update(kdb_hlog_t *ulog, uint32_t entry, uint32_t ulogentries,
-             unsigned int verbose)
+print_update(krb5_context kcontext, uint32_t entry, unsigned int verbose)
 {
     XDR xdrs;
     uint32_t start_sno, i, j, indx;
     char *dbprinc;
     kdb_ent_header_t *indx_log;
     kdb_incr_update_t upd;
+    kdb_hlog_t *ulog;
+    uint32_t ulogentries;
 
-    if (entry && (entry < ulog->kdb_num))
-        start_sno = ulog->kdb_last_sno - entry;
-    else
-        start_sno = ulog->kdb_first_sno - 1;
+    if (!kcontext || !kcontext->kdblog_context)
+        return;
+    ulog = kcontext->kdblog_context->ulog;
+    ulogentries = kcontext->kdblog_context->ulogentries;
+
+    if (entry == 0 || entry > ulog->kdb_num)
+        entry = ulog->kdb_num;
+    start_sno = ulog->kdb_last_sno - entry;
 
     for (i = start_sno; i < ulog->kdb_last_sno; i++) {
         indx = i % ulogentries;
@@ -352,7 +357,7 @@ print_update(kdb_hlog_t *ulog, uint32_t entry, uint32_t ulogentries,
         /*
          * Check for corrupt update entry
          */
-        if (indx_log->kdb_umagic != KDB_ULOG_MAGIC) {
+        if (indx_log->kdb_umagic != KDB_ULOG_MAGIC || indx_log->kdb_entry_sno != i+1) {
             fprintf(stderr, _("Corrupt update entry\n\n"));
             exit(1);
         }
@@ -418,11 +423,13 @@ print_update(kdb_hlog_t *ulog, uint32_t entry, uint32_t ulogentries,
 /* Return a read-only mmap of the ulog, or NULL on failure.  Assumes fd is
  * released on process exit. */
 static kdb_hlog_t *
-map_ulog(const char *filename)
+map_ulog(krb5_context context, const char *filename, uint32_t ulogentries)
 {
     int fd;
     struct stat st;
     kdb_hlog_t *ulog;
+    kdb_log_context *log_ctx;
+    krb5_error_code retval;
 
     fd = open(filename, O_RDONLY);
     if (fd == -1)
@@ -430,7 +437,26 @@ map_ulog(const char *filename)
     if (fstat(fd, &st) < 0)
         return NULL;
     ulog = mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    return (ulog == MAP_FAILED) ? NULL : ulog;
+    if (ulog == MAP_FAILED)
+        return NULL;
+
+    if (!context->kdblog_context) {
+        log_ctx = k5alloc(sizeof(kdb_log_context), &retval);
+        if (log_ctx == NULL) {
+            munmap(ulog, st.st_size);
+            close(fd);
+            return NULL;
+        }
+        memset(log_ctx, 0, sizeof(*log_ctx));
+        context->kdblog_context = log_ctx;
+    } else {
+        log_ctx = context->kdblog_context;
+    }
+    log_ctx->ulog = ulog;
+    log_ctx->ulogentries = ulogentries;
+    log_ctx->ulogfd = fd;
+
+    return ulog;
 }
 
 int
@@ -496,7 +522,7 @@ main(int argc, char **argv)
         exit(0);
     }
 
-    ulog = map_ulog(params.iprop_logfile);
+    ulog = map_ulog(context, params.iprop_logfile, params.iprop_ulogsize);
     if (ulog == NULL) {
         fprintf(stderr, _("Unable to map log file %s\n\n"),
                 params.iprop_logfile);
@@ -557,7 +583,7 @@ main(int argc, char **argv)
     }
 
     if (!headeronly && ulog->kdb_num)
-        print_update(ulog, entry, params.iprop_ulogsize, verbose);
+        print_update(context, entry, verbose);
 
     printf("\n");
 

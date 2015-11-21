@@ -122,6 +122,7 @@ static char *srvtab = NULL;
 static int standalone = 0;
 
 static pid_t fullprop_child = (pid_t)-1;
+static pid_t iprop_pid = (pid_t)-1;
 
 static krb5_principal server;   /* This is our server principal name */
 static krb5_principal client;   /* This is who we're talking to */
@@ -159,6 +160,7 @@ static void send_error(krb5_context context, int fd, krb5_error_code err_code,
                        char *err_text);
 static void recv_error(krb5_context context, krb5_data *inbuf);
 static unsigned int backoff_from_master(int *cnt);
+static char *getclhoststr(const char *clprinc, char *cl, size_t len);
 static kadm5_ret_t kadm5_get_kiprop_host_srv_name(krb5_context context,
                                                   const char *realm_name,
                                                   char **host_service_name);
@@ -308,6 +310,7 @@ main(int argc, char **argv)
     signal_wrapper(SIGSEGV, kill_do_standalone);
     signal_wrapper(SIGUSR1, usr1_handler);
     atexit(atexit_kill_do_standalone);
+    iprop_pid = getpid();
     fullprop_child = fork();
     switch (fullprop_child) {
     case -1:
@@ -623,6 +626,7 @@ do_iprop()
     kdb_last_t mylast;
     kdb_fullresync_result_t *full_ret;
     kadm5_iprop_handle_t handle;
+    char localhost[MAXHOSTNAMELEN] = {0};
 
     if (debug)
         fprintf(stderr, _("Incremental propagation enabled\n"));
@@ -687,6 +691,14 @@ do_iprop()
         return retval;
     }
     krb5_free_principal(kpropd_context, iprop_svc_principal);
+
+    if (!getclhoststr(iprop_svc_princstr, localhost, sizeof(localhost))) {
+        retval = KRB5KRB_ERR_FIELD_TOOLONG;
+        com_err(progname, retval,
+                _("while extracting hostname from local service principal"));
+        krb5_free_principal(kpropd_context, iprop_svc_principal);
+        return retval;
+    }
 
 reinit:
     /*
@@ -967,7 +979,7 @@ reinit:
             goto done;
 
         /*
-         * Sleep for the specified poll interval (Default is 2 mts),
+         * Sleep for the specified poll interval (Default is 2 min),
          * or do a binary exponential backoff if we get an
          * UPDATE_BUSY signal
          */
@@ -979,10 +991,46 @@ reinit:
                         backoff_time);
             }
             sleep(backoff_time);
+        } else if (incr_ret && full_ret &&
+                   incr_ret->ret == UPDATE_FULL_RESYNC_NEEDED &&
+                   full_ret->ret == UPDATE_OK) {
+            /* Poll immediately after a resync to retrieve missing updates */
+            1;
         } else {
             if (debug) {
                 fprintf(stderr, _("Waiting for %d seconds before checking "
                                   "for updates again\n"), pollin);
+            }
+            if (incr_ret && incr_ret->ret == UPDATE_OK) {
+                kadm5_iprop_handle_t handle2;
+                char *old_admin = params.admin_server;
+                char *svc_principal = NULL;
+
+                params.admin_server = localhost;
+
+                retval = kadm5_get_kiprop_host_srv_name(kpropd_context, def_realm, &svc_principal);
+                
+                /*
+                 * Notify downstream clients we received updats.
+                 * Connect to local kadmin (kiprop) and invoke NULLPROC.
+                 */
+                if (!retval)
+                    retval = kadm5_init_with_skey(kpropd_context,
+                                                  iprop_svc_princstr, srvtab,
+                                                  svc_principal, &params,
+                                                  KADM5_STRUCT_VERSION, KADM5_API_VERSION_4,
+                                                  db_args, (void **)&handle2);
+                params.admin_server = old_admin;
+                free(svc_principal);
+
+                if (retval) {
+                    com_err(progname, retval,
+                            _("while connecting to local kiprop (svc=%s)"),
+                            iprop_svc_princstr);
+                } else {
+                    (void) iprop_null_1(NULL, handle2->clnt);
+                    kadm5_destroy((void *)handle2);
+                }
             }
             sleep(pollin);
         }
@@ -1523,6 +1571,9 @@ recv_error(krb5_context context, krb5_data *inbuf)
     if (error->error == KRB_ERR_GENERIC) {
         if (error->text.data)
             fprintf(stderr, _("Generic remote error: %s\n"), error->text.data);
+        /* XXX - Should we allocate a krb5 error code for iprop notify? */
+        if (standalone && iprop_pid != (pid_t)-1)
+            kill(iprop_pid, SIGUSR1);
     } else if (error->error) {
         com_err(progname,
                 (krb5_error_code)error->error + ERROR_TABLE_BASE_krb5,
@@ -1626,4 +1677,19 @@ kadm5_get_kiprop_host_srv_name(krb5_context context, const char *realm_name,
     *host_service_name = name;
 
     return KADM5_OK;
+}
+
+/*
+ * Given a client princ (foo/fqdn@R), copy (in arg cl) the fqdn substring.
+ * Return arg cl sting pointer on success, otherwise NULL.
+ */
+static char *
+getclhoststr(const char *clprinc, char *cl, size_t len)
+{
+    const char *s, *e;
+    if ((s = strchr(clprinc, '/')) == NULL || (e = strchr(++s, '@')) == NULL || (size_t)(e - s) >= len)
+        return NULL;
+    memcpy(cl, s, e-s);
+    cl[e - s] = '\0';
+    return cl;
 }
