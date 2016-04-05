@@ -1,16 +1,31 @@
 build_script:
-  - call "C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x86
+  - call "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat" x86
   - mkdir C:\kfw
   - set KRB_INSTALL_DIR=C:\kfw
   - set CPU=i386
-  - set NO_LEASH=1
   - set
   - cd %APPVEYOR_BUILD_FOLDER%\src
   - nmake -f Makefile.in prep-windows
   - nmake
   - nmake install
   - set CPU=AMD64
-  - setenv /x64
+  - call "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat" x64
   - nmake clean
   - nmake
   - nmake install
+
+# To get RDP access to an appveyor worker for debugging a build, just
+# uncomment these next two lines and the last two lines too.
+#init:
+#  - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+
+# Uncomment this to allow the RDP session to continue after the build
+# finishes.
+#
+# There's a delete-me file on the desktop that one should delete when
+# one is done with the worker.  RDP sessions are capped at 60 minutes as
+# of this writing.
+#
+#on_finish:
+#  - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+
