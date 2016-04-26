@@ -56,6 +56,36 @@
 #include <openssl/evp.h>
 
 /*
+ * In OpenSSL 1.1, HMAC_CTX is opaque and we must use HMAC_CTX_new() and
+ * HMAC_CTX_free().  In prior versions these functions do not exist, so define
+ * them in terms of HMAC_CTX_init() and HMAC_CTX_cleanup().
+ */
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+
+#define HMAC_CTX_new compat_hmac_ctx_new
+#define HMAC_CTX_free compat_hmac_ctx_free
+
+static HMAC_CTX *
+compat_hmac_ctx_new()
+{
+    HMAC_CTX *ctx = malloc(sizeof(*ctx));
+
+    if (ctx != NULL)
+        HMAC_CTX_init(ctx);
+    return ctx;
+}
+
+static void
+compat_hmac_ctx_free(HMAC_CTX *ctx)
+{
+    if (ctx != NULL)
+        HMAC_CTX_cleanup(ctx);
+    free(ctx);
+}
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+
+/*
  * the HMAC transform looks like:
  *
  * H(K XOR opad, H(K XOR ipad, text))
@@ -88,7 +118,7 @@ krb5int_hmac_keyblock(const struct krb5_hash_provider *hash,
 {
     unsigned int i = 0, md_len = 0;
     unsigned char md[EVP_MAX_MD_SIZE];
-    HMAC_CTX c;
+    HMAC_CTX *c;
     size_t hashsize, blocksize;
 
     hashsize = hash->hashsize;
@@ -102,20 +132,23 @@ krb5int_hmac_keyblock(const struct krb5_hash_provider *hash,
     if (!map_digest(hash))
         return(KRB5_CRYPTO_INTERNAL); // unsupported alg
 
-    HMAC_CTX_init(&c);
-    HMAC_Init(&c, keyblock->contents, keyblock->length, map_digest(hash));
+    c = HMAC_CTX_new();
+    if (c == NULL)
+        return KRB5_CRYPTO_INTERNAL;
+
+    HMAC_Init(c, keyblock->contents, keyblock->length, map_digest(hash));
     for (i = 0; i < num_data; i++) {
         const krb5_crypto_iov *iov = &data[i];
 
         if (SIGN_IOV(iov))
-            HMAC_Update(&c, (unsigned char*) iov->data.data, iov->data.length);
+            HMAC_Update(c, (unsigned char *)iov->data.data, iov->data.length);
     }
-    HMAC_Final(&c,(unsigned char *)md, &md_len);
+    HMAC_Final(c,(unsigned char *)md, &md_len);
     if ( md_len <= output->length) {
         output->length = md_len;
         memcpy(output->data, md, output->length);
     }
-    HMAC_CTX_cleanup(&c);
+    HMAC_CTX_free(c);
     return 0;
 
 

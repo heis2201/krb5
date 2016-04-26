@@ -33,6 +33,7 @@
 #ifndef CRYPTO_MOD_H
 #define CRYPTO_MOD_H
 
+#include <openssl/crypto.h>
 #include <openssl/aes.h>
 #include <openssl/sha.h>
 
@@ -42,5 +43,15 @@
 #define k5_sha256_init SHA256_Init
 #define k5_sha256_update SHA256_Update
 #define k5_sha256_final SHA256_Final
+
+/*
+ * OpenSSL 1.1 renamed EVP_MD_CTX_create() and EVP_MD_CTX_destroy() for
+ * consistency with other constructors and destructors.  Use the new names in
+ * our code, and define them to the old names for prior versions.
+ */
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#define EVP_MD_CTX_new EVP_MD_CTX_create
+#define EVP_MD_CTX_free EVP_MD_CTX_destroy
+#endif
 
 #endif /* CRYPTO_MOD_H */
