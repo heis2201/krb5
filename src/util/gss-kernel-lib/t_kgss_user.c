@@ -105,6 +105,7 @@ establish_contexts(const char *tprinc, gss_ctx_id_t *initiator_out,
     assert(major == GSS_S_COMPLETE);
     gss_release_buffer(&minor, &rtoken);
     gss_release_buffer(&minor, &itoken);
+    gss_release_name(&minor, &target_name);
 
     *initiator_out = initiator;
     *acceptor_out = acceptor;
@@ -196,6 +197,7 @@ send_lucid_context(gss_ctx_id_t ctx, int fd)
     marshal_lucid_context(lctx, &data, &len);
     send_data(fd, data, len);
     free(data);
+    (void)gss_krb5_free_lucid_sec_context(&minor, lctx);
 }
 
 /* Create a GSS wrap token of the text "userwrap" and send it to fd. */
@@ -321,6 +323,7 @@ read_iov_token(gss_ctx_id_t ctx, int fd)
 {
     OM_uint32 major, minor;
     gss_iov_buffer_desc iov[6];
+    char *padding;
 
     /* Read in buffers and lay out the IOVs. */
     iov[0].type = GSS_IOV_BUFFER_TYPE_HEADER;
@@ -335,6 +338,7 @@ read_iov_token(gss_ctx_id_t ctx, int fd)
     iov[3].buffer.length = 3;
     iov[4].type = GSS_IOV_BUFFER_TYPE_PADDING;
     read_data(fd, &iov[4].buffer.value, &iov[4].buffer.length);
+    padding = iov[4].buffer.value;
     iov[5].type = GSS_IOV_BUFFER_TYPE_TRAILER;
     read_data(fd, &iov[5].buffer.value, &iov[5].buffer.length);
 
@@ -346,7 +350,7 @@ read_iov_token(gss_ctx_id_t ctx, int fd)
 
     free(iov[0].buffer.value);
     free(iov[2].buffer.value);
-    free(iov[4].buffer.value);
+    free(padding);
     free(iov[5].buffer.value);
 }
 

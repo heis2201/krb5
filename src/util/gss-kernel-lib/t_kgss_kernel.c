@@ -95,8 +95,15 @@ read_lucid_context(gss_ctx_id_t *ctx_out)
     } else
         abort();
 
+    free(data);
     major = krb5_gss_import_lucid_sec_context(&minor, &lctx, ctx_out);
     check(major, minor, "krb5_gss_import_lucid_sec_context");
+    if (lctx.protocol == 0) {
+        free(lctx.rfc1964_kd.ctx_key.data);
+    } else {
+        free(lctx.cfx_kd.ctx_key.data);
+        free(lctx.cfx_kd.acceptor_subkey.data);
+    }
 }
 
 /* Read a wrap token from stdin and verify that it says "userwrap". */
@@ -136,6 +143,7 @@ read_iov_token(gss_ctx_id_t ctx)
 {
     OM_uint32 major, minor;
     gss_iov_buffer_desc iov[6];
+    char *padding;
 
     /* Read in buffers and lay out the IOVs. */
     iov[0].type = GSS_IOV_BUFFER_TYPE_HEADER;
@@ -150,6 +158,7 @@ read_iov_token(gss_ctx_id_t ctx)
     iov[3].buffer.length = 3;
     iov[4].type = GSS_IOV_BUFFER_TYPE_PADDING;
     read_data(STDIN_FILENO, &iov[4].buffer.value, &iov[4].buffer.length);
+    padding = iov[4].buffer.value;
     iov[5].type = GSS_IOV_BUFFER_TYPE_TRAILER;
     read_data(STDIN_FILENO, &iov[5].buffer.value, &iov[5].buffer.length);
 
@@ -161,7 +170,7 @@ read_iov_token(gss_ctx_id_t ctx)
 
     free(iov[0].buffer.value);
     free(iov[2].buffer.value);
-    free(iov[4].buffer.value);
+    free(padding);
     free(iov[5].buffer.value);
 }
 
