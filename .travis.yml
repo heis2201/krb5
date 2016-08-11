@@ -1,4 +1,4 @@
-language: c
+language: cpp
 
 sudo: required
 
@@ -21,4 +21,4 @@ before_install:
   - sudo make install
   - cd ../..
 
-script: cd src && autoreconf && ./configure --with-ldap && make && make check
+script: cd src && autoreconf && ./configure --with-ldap --enable-asan && make && make check
