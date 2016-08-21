@@ -150,6 +150,23 @@ get_db_opt(char *input, char **opt, char **val)
 
 }
 
+/* Encode a principal name in the form used for DB keys, which is the unparsed
+ * principal name with a zero terminator. */
+static krb5_error_code
+encode_princ_dbkey(krb5_context context, krb5_const_principal principal,
+                   void **dbkey_out, size_t *len_out)
+{
+    krb5_error_code retval;
+    char *name;
+
+    retval = krb5_unparse_name(context, principal, &name);
+    if (retval)
+        return retval;
+    *dbkey_out = name;
+    *len_out = strlen(name) + 1;
+    return 0;
+}
+
 /* Restore dbctx to the uninitialized state. */
 static void
 ctx_clear(krb5_db2_context *dbc)
@@ -759,7 +776,6 @@ krb5_db2_get_principal(krb5_context context, krb5_const_principal searchfor,
     krb5_error_code retval;
     DB     *db;
     DBT     key, contents;
-    krb5_data keydata, contdata;
     int     dbret;
 
     *entry = NULL;
@@ -772,17 +788,14 @@ krb5_db2_get_principal(krb5_context context, krb5_const_principal searchfor,
     if (retval)
         return retval;
 
-    /* XXX deal with wildcard lookups */
-    retval = krb5_encode_princ_dbkey(context, &keydata, searchfor);
+    retval = encode_princ_dbkey(context, searchfor, &key.data, &key.size);
     if (retval)
         goto cleanup;
-    key.data = keydata.data;
-    key.size = keydata.length;
 
     db = dbc->db;
     dbret = (*db->get)(db, &key, &contents, 0);
     retval = errno;
-    krb5_free_data_contents(context, &keydata);
+    free(key.data);
     switch (dbret) {
     case 1:
         retval = KRB5_KDB_NOENTRY;
@@ -791,9 +804,8 @@ krb5_db2_get_principal(krb5_context context, krb5_const_principal searchfor,
     default:
         goto cleanup;
     case 0:
-        contdata.data = contents.data;
-        contdata.length = contents.size;
-        retval = krb5_decode_princ_entry(context, &contdata, entry);
+        retval = krb5_dbe_decode_princ(context, contents.data, contents.size,
+                                       entry);
         break;
     }
 
@@ -809,7 +821,6 @@ krb5_db2_put_principal(krb5_context context, krb5_db_entry *entry,
     int     dbret;
     DB     *db;
     DBT     key, contents;
-    krb5_data contdata, keydata;
     krb5_error_code retval;
     krb5_db2_context *dbc;
 
@@ -830,23 +841,20 @@ krb5_db2_put_principal(krb5_context context, krb5_db_entry *entry,
 
     db = dbc->db;
 
-    retval = krb5_encode_princ_entry(context, &contdata, entry);
+    retval = krb5_dbe_encode_princ(context, entry, &contents.data,
+                                   &contents.size);
     if (retval)
         goto cleanup;
-    contents.data = contdata.data;
-    contents.size = contdata.length;
-    retval = krb5_encode_princ_dbkey(context, &keydata, entry->princ);
+    retval = encode_princ_dbkey(context, entry->princ, &key.data, &key.size);
     if (retval) {
-        krb5_free_data_contents(context, &contdata);
+        free(contents.data);
         goto cleanup;
     }
 
-    key.data = keydata.data;
-    key.size = keydata.length;
     dbret = (*db->put)(db, &key, &contents, 0);
     retval = dbret ? errno : 0;
-    krb5_free_data_contents(context, &keydata);
-    krb5_free_data_contents(context, &contdata);
+    free(key.data);
+    free(contents.data);
 
 cleanup:
     ctx_update_age(dbc);
@@ -861,8 +869,7 @@ krb5_db2_delete_principal(krb5_context context, krb5_const_principal searchfor)
     krb5_db_entry *entry;
     krb5_db2_context *dbc;
     DB     *db;
-    DBT     key, contents;
-    krb5_data keydata, contdata;
+    DBT     key, contents, zcontents;
     int     i, dbret;
 
     if (!inited(context))
@@ -872,10 +879,9 @@ krb5_db2_delete_principal(krb5_context context, krb5_const_principal searchfor)
     if ((retval = ctx_lock(context, dbc, KRB5_LOCKMODE_EXCLUSIVE)))
         return (retval);
 
-    if ((retval = krb5_encode_princ_dbkey(context, &keydata, searchfor)))
+    retval = encode_princ_dbkey(context, searchfor, &key.data, &key.size);
+    if (retval)
         goto cleanup;
-    key.data = keydata.data;
-    key.size = keydata.length;
 
     db = dbc->db;
     dbret = (*db->get) (db, &key, &contents, 0);
@@ -890,9 +896,8 @@ krb5_db2_delete_principal(krb5_context context, krb5_const_principal searchfor)
     case 0:
         ;
     }
-    contdata.data = contents.data;
-    contdata.length = contents.size;
-    retval = krb5_decode_princ_entry(context, &contdata, &entry);
+    retval = krb5_dbe_decode_princ(context, contents.data, contents.size,
+                                   &entry);
     if (retval)
         goto cleankey;
 
@@ -904,22 +909,21 @@ krb5_db2_delete_principal(krb5_context context, krb5_const_principal searchfor)
         }
     }
 
-    retval = krb5_encode_princ_entry(context, &contdata, entry);
+    retval = krb5_dbe_encode_princ(context, entry, &zcontents.data,
+                                   &zcontents.size);
     krb5_db_free_principal(context, entry);
     if (retval)
         goto cleankey;
 
-    contents.data = contdata.data;
-    contents.size = contdata.length;
-    dbret = (*db->put) (db, &key, &contents, 0);
+    dbret = (*db->put) (db, &key, &zcontents, 0);
     retval = dbret ? errno : 0;
-    krb5_free_data_contents(context, &contdata);
+    free(zcontents.data);
     if (retval)
         goto cleankey;
     dbret = (*db->del) (db, &key, 0);
     retval = dbret ? errno : 0;
 cleankey:
-    krb5_free_data_contents(context, &keydata);
+    free(key.data);
 
 cleanup:
     ctx_update_age(dbc);
@@ -1070,10 +1074,9 @@ curs_run_cb(iter_curs *curs, ctx_iterate_cb func, krb5_pointer func_arg)
     krb5_error_code retval, lockerr;
     krb5_db_entry *entry;
     krb5_context ctx = curs->ctx;
-    krb5_data contdata;
 
-    contdata = make_data(curs->data.data, curs->data.size);
-    retval = krb5_decode_princ_entry(ctx, &contdata, &entry);
+    retval = krb5_dbe_decode_princ(ctx, curs->data.data, curs->data.size,
+                                   &entry);
     if (retval)
         return retval;
     /* Save libdb key across possible DB closure. */

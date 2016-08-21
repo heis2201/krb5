@@ -31,31 +31,20 @@
 #include "kdb_xdr.h"
 
 krb5_error_code
-krb5_encode_princ_dbkey(krb5_context context, krb5_data *key,
-                        krb5_const_principal principal)
-{
-    char *princ_name;
-    krb5_error_code retval;
-
-    if (!(retval = krb5_unparse_name(context, principal, &princ_name))) {
-        /* need to store the NULL for decoding */
-        key->length = strlen(princ_name)+1;
-        key->data = princ_name;
-    }
-    return(retval);
-}
-
-krb5_error_code
-krb5_encode_princ_entry(krb5_context context, krb5_data *content,
-                        krb5_db_entry *entry)
+krb5_dbe_encode_princ(krb5_context context, const krb5_db_entry *entry,
+                      void **enc_out, size_t *len_out)
 {
     int                   i, j;
-    unsigned int          unparse_princ_size;
+    size_t                unparse_princ_size, len;
     char                * unparse_princ;
-    unsigned char       * nextloc;
+    uint8_t             * enc = NULL;
+    uint8_t             * nextloc;
     krb5_tl_data        * tl_data;
     krb5_error_code       retval;
     krb5_int16            psize16;
+
+    *enc_out = NULL;
+    *len_out = 0;
 
     /*
      * Generate one lump of data from the krb5_db_entry.
@@ -75,20 +64,20 @@ krb5_encode_princ_entry(krb5_context context, krb5_data *content,
      * then (4 [type + length] + tl_data_length) bytes per tl_data
      * then (4 + (4 + key_data_length) per key_data_contents) bytes per key_data
      */
-    content->length = entry->len + entry->e_length;
+    len = entry->len + entry->e_length;
 
     if ((retval = krb5_unparse_name(context, entry->princ, &unparse_princ)))
         return(retval);
 
     unparse_princ_size = strlen(unparse_princ) + 1;
-    content->length += unparse_princ_size;
-    content->length += 2;
+    len += unparse_princ_size;
+    len += 2;
 
     i = 0;
     /* tl_data is a linked list */
     for (tl_data = entry->tl_data; tl_data; tl_data = tl_data->tl_data_next) {
-        content->length += tl_data->tl_data_length;
-        content->length += 4; /* type, length */
+        len += tl_data->tl_data_length;
+        len += 4; /* type, length */
         i++;
     }
 
@@ -99,23 +88,22 @@ krb5_encode_princ_entry(krb5_context context, krb5_data *content,
 
     /* key_data is an array */
     for (i = 0; i < entry->n_key_data; i++) {
-        content->length += 4; /* Version, KVNO */
+        len += 4; /* Version, KVNO */
         for (j = 0; j < entry->key_data[i].key_data_ver; j++) {
-            content->length += entry->key_data[i].key_data_length[j];
-            content->length += 4; /* type + length */
+            len += entry->key_data[i].key_data_length[j];
+            len += 4; /* type + length */
         }
     }
 
-    if ((content->data = malloc(content->length)) == NULL) {
-        retval = ENOMEM;
+    enc = k5alloc(len, &retval);
+    if (enc == NULL)
         goto epc_error;
-    }
 
     /*
      * Now we go through entry again, this time copying data
      * These first entries are always saved regardless of version
      */
-    nextloc = (unsigned char *)content->data;
+    nextloc = enc;
 
     /* Base Length */
     krb5_kdb_encode_int16(entry->len, nextloc);
@@ -216,23 +204,29 @@ krb5_encode_princ_entry(krb5_context context, krb5_data *content,
         }
     }
 
+    *enc_out = enc;
+    *len_out = len;
+    enc = NULL;
+
 epc_error:;
+    free(enc);
     free(unparse_princ);
     return retval;
 }
 
 krb5_error_code
-krb5_decode_princ_entry(krb5_context context, krb5_data *content,
-                        krb5_db_entry **entry_ptr)
+krb5_dbe_decode_princ(krb5_context context, const void *enc, size_t len,
+                      krb5_db_entry **entry_out)
 {
-    int                   sizeleft, i;
-    unsigned char       * nextloc;
+    int                   i;
+    size_t                sizeleft;
+    const uint8_t       * nextloc;
     krb5_tl_data       ** tl_data;
     krb5_int16            i16;
     krb5_db_entry       * entry;
     krb5_error_code retval;
 
-    *entry_ptr = NULL;
+    *entry_out = NULL;
 
     entry = k5alloc(sizeof(*entry), &retval);
     if (entry == NULL)
@@ -248,8 +242,8 @@ krb5_decode_princ_entry(krb5_context context, krb5_data *content,
      */
 
     /* First do the easy stuff */
-    nextloc = (unsigned char *)content->data;
-    sizeleft = content->length;
+    nextloc = enc;
+    sizeleft = len;
     if (sizeleft < KRB5_KDB_V1_BASE_LENGTH) {
         retval = KRB5_KDB_TRUNCATED_RECORD;
         goto error_out;
@@ -333,7 +327,7 @@ krb5_decode_princ_entry(krb5_context context, krb5_data *content,
     krb5_kdb_decode_int16(nextloc, i16);
     i = (int) i16;
     nextloc += 2;
-    if (i <= 0 || i > sizeleft || nextloc[i - 1] != '\0' ||
+    if (i <= 0 || (size_t)i > sizeleft || nextloc[i - 1] != '\0' ||
         memchr((char *)nextloc, '\0', i - 1) != NULL) {
         retval = KRB5_KDB_TRUNCATED_RECORD;
         goto error_out;
@@ -432,7 +426,7 @@ krb5_decode_princ_entry(krb5_context context, krb5_data *content,
             goto error_out;
         }
     }
-    *entry_ptr = entry;
+    *entry_out = entry;
     return 0;
 
 error_out:
