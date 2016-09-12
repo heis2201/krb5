@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /* plugins/kdb/db2/kdb_xdr.c */
 /*
- * Copyright 1995 by the Massachusetts Institute of Technology.
+ * Copyright 1995, 2016 by the Massachusetts Institute of Technology.
  * All Rights Reserved.
  *
  * Export of this software from the United States of America may
@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include "kdb_xdr.h"
+#include "policy_db.h"
 
 krb5_error_code
 krb5_dbe_encode_princ(krb5_context context, const krb5_db_entry *entry,
@@ -432,4 +433,57 @@ krb5_dbe_decode_princ(krb5_context context, const void *enc, size_t len,
 error_out:
     krb5_db_free_principal(context, entry);
     return retval;
+}
+
+krb5_error_code
+krb5_dbe_encode_policy(krb5_context context, osa_policy_ent_t entry,
+                       void **enc_out, size_t *len_out)
+{
+    XDR xdrs;
+
+    xdralloc_create(&xdrs, XDR_ENCODE);
+    if (!xdr_osa_policy_ent_rec(&xdrs, entry)) {
+        xdr_destroy(&xdrs);
+        return ENOMEM;
+    }
+
+    *enc_out = xdralloc_getdata(&xdrs);
+    *len_out = xdr_getpos(&xdrs);
+    xdralloc_release(&xdrs);
+    return 0;
+}
+
+krb5_error_code
+krb5_dbe_decode_policy(krb5_context context, const void *enc, size_t len,
+                       osa_policy_ent_t *entry_out)
+{
+    krb5_error_code ret = 0;
+    osa_policy_ent_t entry = NULL;
+    char *aligned_data = NULL;
+    XDR xdrs;
+
+    entry = k5alloc(sizeof(*entry), &ret);
+    if (entry == NULL)
+        goto cleanup;
+
+    aligned_data = k5memdup(enc, len, &ret);
+    if (aligned_data == NULL)
+        goto cleanup;
+
+    xdrmem_create(&xdrs, aligned_data, len, XDR_DECODE);
+    if (!xdr_osa_policy_ent_rec(&xdrs, entry)) {
+        xdr_destroy(&xdrs);
+        xdr_free(xdr_osa_policy_ent_rec, entry);
+        ret = KRB5_KDB_TRUNCATED_RECORD;
+        goto cleanup;
+    }
+
+    xdr_destroy(&xdrs);
+    *entry_out = entry;
+    entry = NULL;
+
+cleanup:
+    free(aligned_data);
+    free(entry);
+    return ret;
 }

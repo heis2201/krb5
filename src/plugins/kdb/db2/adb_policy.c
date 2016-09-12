@@ -9,6 +9,7 @@
 
 #include <sys/file.h>
 #include "policy_db.h"
+#include "kdb_xdr.h"
 
 #define OPENLOCK(db, mode)                                              \
     {                                                                   \
@@ -53,9 +54,10 @@ osa_adb_create_policy(osa_adb_policy_t db, osa_policy_ent_t entry)
 {
     DBT                 dbkey;
     DBT                 dbdata;
-    XDR                 xdrs;
+    DBT                 tmpdb;
     int                 ret;
 
+    memset(&dbdata, 0, sizeof(dbdata));
     OPENLOCK(db, KRB5_DB_LOCKMODE_EXCLUSIVE);
 
     if(entry->name == NULL) {
@@ -65,7 +67,7 @@ osa_adb_create_policy(osa_adb_policy_t db, osa_policy_ent_t entry)
     dbkey.data = entry->name;
     dbkey.size = (strlen(entry->name) + 1);
 
-    switch(db->db->get(db->db, &dbkey, &dbdata, 0)) {
+    switch(db->db->get(db->db, &dbkey, &tmpdb, 0)) {
     case 0:
         ret = OSA_ADB_DUP;
         goto error;
@@ -75,14 +77,11 @@ osa_adb_create_policy(osa_adb_policy_t db, osa_policy_ent_t entry)
         ret = errno;
         goto error;
     }
-    xdralloc_create(&xdrs, XDR_ENCODE);
-    if(!xdr_osa_policy_ent_rec(&xdrs, entry)) {
-        xdr_destroy(&xdrs);
-        ret = OSA_ADB_XDR_FAILURE;
+
+    ret = krb5_dbe_encode_policy(NULL, entry, &dbdata.data, &dbdata.size);
+    if (ret)
         goto error;
-    }
-    dbdata.data = xdralloc_getdata(&xdrs);
-    dbdata.size = xdr_getpos(&xdrs);
+
     switch(db->db->put(db->db, &dbkey, &dbdata, R_NOOVERWRITE)) {
     case 0:
         if((db->db->sync(db->db, 0)) == -1)
@@ -96,10 +95,10 @@ osa_adb_create_policy(osa_adb_policy_t db, osa_policy_ent_t entry)
         ret = OSA_ADB_FAILURE;
         break;
     }
-    xdr_destroy(&xdrs);
 
 error:
     CLOSELOCK(db);
+    free(dbdata.data);
     return ret;
 }
 
@@ -182,10 +181,7 @@ osa_adb_get_policy(osa_adb_policy_t db, char *name,
 {
     DBT                 dbkey;
     DBT                 dbdata;
-    XDR                 xdrs;
     int                 ret;
-    char                *aligned_data = NULL;
-    osa_policy_ent_t    entry = NULL;
 
     *entry_ptr = NULL;
     OPENLOCK(db, KRB5_DB_LOCKMODE_SHARED);
@@ -208,25 +204,12 @@ osa_adb_get_policy(osa_adb_policy_t db, char *name,
         ret = OSA_ADB_FAILURE;
         goto error;
     }
-    entry = k5alloc(sizeof(*entry), &ret);
-    if (entry == NULL)
+
+    ret = krb5_dbe_decode_policy(NULL, dbdata.data, dbdata.size, entry_ptr);
+    if (ret)
         goto error;
-    aligned_data = k5memdup(dbdata.data, dbdata.size, &ret);
-    if (aligned_data == NULL)
-        goto error;
-    xdrmem_create(&xdrs, aligned_data, dbdata.size, XDR_DECODE);
-    if (!xdr_osa_policy_ent_rec(&xdrs, entry)) {
-        ret = OSA_ADB_FAILURE;
-        goto error;
-    }
-    ret = OSA_ADB_OK;
-    xdr_destroy(&xdrs);
-    *entry_ptr = entry;
-    entry = NULL;
 
 error:
-    free(aligned_data);
-    free(entry);
     CLOSELOCK(db);
     return ret;
 }
@@ -257,9 +240,9 @@ osa_adb_put_policy(osa_adb_policy_t db, osa_policy_ent_t entry)
     DBT                 dbkey;
     DBT                 dbdata;
     DBT                 tmpdb;
-    XDR                 xdrs;
     int                 ret;
 
+    memset(&dbdata, 0, sizeof(dbdata));
     OPENLOCK(db, KRB5_DB_LOCKMODE_EXCLUSIVE);
 
     if(entry->name == NULL) {
@@ -278,14 +261,11 @@ osa_adb_put_policy(osa_adb_policy_t db, osa_policy_ent_t entry)
         ret = OSA_ADB_FAILURE;
         goto error;
     }
-    xdralloc_create(&xdrs, XDR_ENCODE);
-    if(!xdr_osa_policy_ent_rec(&xdrs, entry)) {
-        xdr_destroy(&xdrs);
-        ret = OSA_ADB_XDR_FAILURE;
+
+    ret = krb5_dbe_encode_policy(NULL, entry, &dbdata.data, &dbdata.size);
+    if (ret)
         goto error;
-    }
-    dbdata.data = xdralloc_getdata(&xdrs);
-    dbdata.size = xdr_getpos(&xdrs);
+
     switch(db->db->put(db->db, &dbkey, &dbdata, 0)) {
     case 0:
         if((db->db->sync(db->db, 0)) == -1)
@@ -296,10 +276,10 @@ osa_adb_put_policy(osa_adb_policy_t db, osa_policy_ent_t entry)
         ret = OSA_ADB_FAILURE;
         break;
     }
-    xdr_destroy(&xdrs);
 
 error:
     CLOSELOCK(db);
+    free(dbdata.data);
     return ret;
 }
 
@@ -324,10 +304,8 @@ osa_adb_iter_policy(osa_adb_policy_t db, osa_adb_iter_policy_func func,
 {
     DBT                     dbkey,
         dbdata;
-    XDR                     xdrs;
     int                     ret;
     osa_policy_ent_t        entry;
-    char                    *aligned_data;
 
     OPENLOCK(db, KRB5_DB_LOCKMODE_EXCLUSIVE); /* hmmm */
 
@@ -337,27 +315,11 @@ osa_adb_iter_policy(osa_adb_policy_t db, osa_adb_iter_policy_func func,
     }
 
     while (ret == 0) {
-        if (!(entry = (osa_policy_ent_t) malloc(sizeof(osa_policy_ent_rec)))) {
-            ret = ENOMEM;
-            goto error;
-        }
-
-        aligned_data = k5memdup(dbdata.data, dbdata.size, &ret);
-        if (aligned_data == NULL)
+        ret = krb5_dbe_decode_policy(NULL, dbdata.data, dbdata.size, &entry);
+        if (ret)
             goto error;
 
-        memset(entry, 0, sizeof(osa_policy_ent_rec));
-        xdrmem_create(&xdrs, aligned_data, dbdata.size, XDR_DECODE);
-        if(!xdr_osa_policy_ent_rec(&xdrs, entry)) {
-            xdr_destroy(&xdrs);
-            free(aligned_data);
-            osa_free_policy_ent(entry);
-            ret = OSA_ADB_FAILURE;
-            goto error;
-        }
         (*func)(data, entry);
-        xdr_destroy(&xdrs);
-        free(aligned_data);
         osa_free_policy_ent(entry);
         ret = db->db->seq(db->db, &dbkey, &dbdata, R_NEXT);
     }
