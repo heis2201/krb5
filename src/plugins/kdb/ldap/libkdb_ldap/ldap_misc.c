@@ -802,6 +802,7 @@ get_str_from_tl_data(krb5_context context, krb5_db_entry *entry, int type,
 /*
  * Replace the relative DN component of dn with newrdn.
  */
+#ifdef HAVE_LDAP_STR2DN
 krb5_error_code
 replace_rdn(krb5_context context, const char *dn, const char *newrdn,
             char **newdn_out)
@@ -840,6 +841,27 @@ cleanup:
         ldap_rdnfree(lrdn);
     return ret;
 }
+#else /* HAVE_LDAP_STR2DN */
+krb5_error_code
+replace_rdn(krb5_context context, const char *dn, const char *newrdn,
+            char **newdn_out)
+{
+    const char *endrdn;
+    size_t newrdnlen = strlen(newrdn);
+    char *newdn;
+
+    *newdn_out = NULL;
+    endrdn = dn + strcspn(dn, ",");
+    newdn = malloc(newrdnlen + (endrdn - dn) + 1);
+    if (newdn == NULL)
+        return ENOMEM;
+    memcpy(newdn, newrdn, newrdnlen);
+    memcpy(newdn + newrdnlen, dn, endrdn - dn);
+    newdn[newrdnlen + (endrdn - dn)] = '\0';
+    *newdn_out = newdn;
+    return 0;
+}
+#endif /* HAVE_LDAP_STR2DN */
 
 krb5_error_code
 krb5_get_userdn(krb5_context context, krb5_db_entry *entry, char **userdn)

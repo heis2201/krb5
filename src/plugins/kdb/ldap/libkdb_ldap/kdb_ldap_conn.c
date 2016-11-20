@@ -130,6 +130,18 @@ interact(LDAP *ld, unsigned flags, void *defaults, void *sin)
 
 #endif
 
+/*
+ * OpenLDAP defines LDAP_SASL_QUIET, and prints messages to stderr if the flags
+ * argument of ldap_sasl_interactive_bind_s() is anything else.  Solaris does
+ * not define LDAP_SASL_QUIET, and returns an error if the flags argument of
+ * ldap_sasl_interactive_bind_s() is anything besides LDAP_SASL_INTERACTIVE.
+ */
+#ifdef LDAP_SASL_QUIET
+#define LDSASLFLAGS LDAP_SASL_QUIET
+#else
+#define LDSASLFLAGS LDAP_SASL_INTERACTIVE
+#endif
+
 static krb5_error_code
 authenticate(krb5_ldap_context *ctx, krb5_ldap_server_handle *server)
 {
@@ -139,7 +151,7 @@ authenticate(krb5_ldap_context *ctx, krb5_ldap_server_handle *server)
     if (ctx->sasl_mech != NULL) {
         st = ldap_sasl_interactive_bind_s(server->ldap_handle, NULL,
                                           ctx->sasl_mech, NULL, NULL,
-                                          LDAP_SASL_QUIET, interact, ctx);
+                                          LDSASLFLAGS, interact, ctx);
         if (st != LDAP_SUCCESS) {
             k5_setmsg(ctx->kcontext, KRB5_KDB_ACCESS_ERROR,
                       _("Cannot bind to LDAP server '%s' with SASL mechanism "
