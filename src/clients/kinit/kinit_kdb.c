@@ -36,7 +36,7 @@
 #include <kdb.h>
 #include "extern.h"
 
-/** Server handle */
+/* Server handle */
 static void *server_handle;
 
 /**
@@ -56,16 +56,20 @@ kinit_kdb_init(krb5_context *pcontext, char *realm)
     }
     memset(&config, 0, sizeof config);
     retval = kadm5_init_krb5_context(pcontext);
+
     if (retval)
         return retval;
+
     config.mask = KADM5_CONFIG_REALM;
     config.realm = realm;
-    retval = kadm5_init(*pcontext, "kinit", NULL /*pass*/,
+    retval = kadm5_init(*pcontext, "kinit", NULL, /* Pass */
                         "kinit", &config,
                         KADM5_STRUCT_VERSION, KADM5_API_VERSION_4, NULL,
                         &server_handle);
+
     if (retval)
         return retval;
+
     retval = krb5_db_register_keytab(*pcontext);
     return retval;
 }

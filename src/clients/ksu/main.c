@@ -33,14 +33,13 @@
 #include <signal.h>
 #include <grp.h>
 
-/* globals */
+/* Globals */
 char * prog_name;
 int auth_debug =0;
 char k5login_path[MAXPATHLEN];
 char k5users_path[MAXPATHLEN];
 char * gb_err = NULL;
 int quiet = 0;
-/***********/
 
 #define KS_TEMPORARY_CACHE "MEMORY:_ksu"
 #define KS_TEMPORARY_PRINC "_ksu/_ksu@_ksu"
@@ -59,18 +58,21 @@ static krb5_error_code resolve_target_cache(krb5_context ksu_context,
                                             krb5_ccache *ccache_out,
                                             krb5_boolean *ccache_reused);
 
-/* Note -e and -a options are mutually exclusive */
-/* insure the proper specification of target user as well as catching
-   ill specified arguments to commands */
-
-void usage (){
+/*
+ * -e and -a options are mutually exclusive
+ * insure the proper specification of target user as well as catching
+ * ill-specified arguments to commands
+ */
+void
+usage()
+{
     fprintf(stderr,
             _("Usage: %s [target user] [-n principal] [-c source cachename] "
               "[-k] [-r time] [-pf] [-l lifetime] [-zZ] [-q] "
               "[-e command [args... ] ] [-a [args... ] ]\n"), prog_name);
 }
 
-/* for Ultrix and friends ... */
+/* For Ultrix and friends */
 #ifndef MAXHOSTNAMELEN
 #define MAXHOSTNAMELEN 64
 #endif
@@ -79,17 +81,15 @@ void usage (){
 static uid_t source_uid, target_uid;
 
 int
-main (argc, argv)
-    int argc;
-    char ** argv;
+main(int argc, char *argv[])
 {
-    int hp =0;
+    int hp = 0;
     int some_rest_copy = 0;
     int all_rest_copy = 0;
     char *localhostname = NULL;
     krb5_get_init_creds_opt *options = NULL;
-    int option=0;
-    int statusp=0;
+    int option = 0;
+    int statusp = 0;
     krb5_error_code retval = 0;
     krb5_principal client = NULL, tmp_princ = NULL;
     krb5_ccache cc_tmp = NULL, cc_target = NULL;
@@ -106,9 +106,9 @@ main (argc, argv)
     krb5_boolean auth_val;
     krb5_boolean authorization_val = FALSE;
     int path_passwd = 0;
-    int done =0,i,j;
+    int done = 0, i, j;
     uid_t ruid = getuid ();
-    struct passwd *pwd=NULL,  *target_pwd ;
+    struct passwd *pwd = NULL, *target_pwd ;
     char * shell;
     char ** params;
     int keep_target_cache = 0;
@@ -121,7 +121,7 @@ main (argc, argv)
     krb5_boolean restrict_creds;
     krb5_deltat lifetime, rlife;
 
-    params = (char **) xcalloc (2, sizeof (char *));
+    params = (char **)xcalloc(2, sizeof(char *));
     params[1] = NULL;
 
     unsetenv ("KRB5_CONFIG");
@@ -142,13 +142,12 @@ main (argc, argv)
         argv[0] = strrchr(argv[0], '/')+1;
     prog_name = argv[0];
     if (strlen (prog_name) > 50) {
-        /* this many chars *after* last / ?? */
+        /* This many chars *after* last / ?? */
         com_err(prog_name, 0,
                 _("program name too long - quitting to avoid triggering "
                   "system logging bugs"));
         exit (1);
     }
-
 
 #ifndef LOG_NDELAY
 #define LOG_NDELAY 0
@@ -161,15 +160,16 @@ main (argc, argv)
 #endif /* 4.2 syslog */
 
 
-    if (( argc == 1) || (argv[1][0] == '-')){
+    if ((argc == 1) || (argv[1][0] == '-')) {
         target_user = xstrdup("root");
         pargc = argc;
         pargv = argv;
     } else {
         target_user = xstrdup(argv[1]);
-        pargc = argc -1;
+        pargc = argc - 1;
 
-        if ((pargv =(char **) calloc(pargc +1,sizeof(char *)))==NULL){
+        pargv = (char **)calloc(pargc + 1, sizeof(char *));
+        if (pargv == NULL) {
             com_err(prog_name, errno, _("while allocating memory"));
             exit(1);
         }
@@ -177,20 +177,22 @@ main (argc, argv)
         pargv[pargc] = NULL;
         pargv[0] = argv[0];
 
-        for(i =1; i< pargc; i ++){
-            pargv[i] = argv[i + 1];
+        for (i = 1; i < pargc; i++) {
+            pargv[i] = argv[i+1];
         }
     }
 
-    if (krb5_seteuid (ruid)) {
-        com_err (prog_name, errno, _("while setting euid to source user"));
+    if (krb5_seteuid(ruid)) {
+        com_err(prog_name, errno, _("while setting euid to source user"));
         exit (1);
     }
-    while(!done && ((option = getopt(pargc, pargv,"n:c:r:a:zZDfpkql:e:")) != -1)){
+    option = getopt(pargc, pargv, "n:c:r:a:zZDfpkql:e:");
+    while (!done && option != -1) {
         switch (option) {
         case 'r':
             if (strlen (optarg) >= 14)
                 optarg = "bad-time";
+
             retval = krb5_string_to_deltat(optarg, &rlife);
             if (retval != 0 || rlife == 0) {
                 fprintf(stderr, _("Bad lifetime value (%s hours?)\n"), optarg);
@@ -199,16 +201,22 @@ main (argc, argv)
             krb5_get_init_creds_opt_set_renew_life(options, rlife);
             break;
         case 'a':
-            /* when integrating this remember to pass in pargc, pargv and
-               take care of params argument */
+            /*
+             * When integrating this remember to pass in pargc, pargv and
+             * take care of params argument.
+             */
             optind --;
-            if (auth_debug){printf("Before get_params optind=%d\n", optind);}
+            if (auth_debug)
+                printf("Before get_params optind=%d\n", optind);
 
-            if ((retval = get_params( & optind, pargc, pargv, &params))){
+            retval = get_params( & optind, pargc, pargv, &params);
+            if (retval) {
                 com_err(prog_name, retval, _("when gathering parameters"));
                 errflg++;
             }
-            if(auth_debug){ printf("After get_params optind=%d\n", optind);}
+            if (auth_debug)
+                printf("After get_params optind=%d\n", optind);
+
             done = 1;
             break;
         case 'p':
@@ -234,7 +242,8 @@ main (argc, argv)
             krb5_get_init_creds_opt_set_tkt_life(options, lifetime);
             break;
         case 'n':
-            if ((retval = krb5_parse_name(ksu_context, optarg, &client))){
+            retval = krb5_parse_name(ksu_context, optarg, &client);
+            if (retval) {
                 com_err(prog_name, retval, _("when parsing name %s"), optarg);
                 errflg++;
             }
@@ -247,7 +256,7 @@ main (argc, argv)
 #endif
         case 'z':
             some_rest_copy = 1;
-            if(all_rest_copy) {
+            if (all_rest_copy) {
                 fprintf(stderr,
                         _("-z option is mutually exclusive with -Z.\n"));
                 errflg++;
@@ -255,7 +264,7 @@ main (argc, argv)
             break;
         case 'Z':
             all_rest_copy = 1;
-            if(some_rest_copy) {
+            if (some_rest_copy) {
                 fprintf(stderr,
                         _("-Z option is mutually exclusive with -z.\n"));
                 errflg++;
@@ -264,7 +273,7 @@ main (argc, argv)
         case 'c':
             if (cc_source_tag == NULL) {
                 cc_source_tag = xstrdup(optarg);
-                if ( strchr(cc_source_tag, ':')){
+                if (strchr(cc_source_tag, ':')) {
                     cc_source_tag_tmp = strchr(cc_source_tag, ':') + 1;
 
                     if (!ks_ccache_name_is_initialized(ksu_context,
@@ -274,8 +283,7 @@ main (argc, argv)
                                 cc_source_tag_tmp);
                         exit (1);
                     }
-                }
-                else {
+                } else {
                     fprintf(stderr, _("malformed credential cache name %s\n"),
                             cc_source_tag);
                     errflg++;
@@ -293,12 +301,14 @@ main (argc, argv)
                 com_err(prog_name, retval, _("when gathering parameters"));
                 errflg++;
             }
-            if(auth_debug){printf("After get_params optind=%d\n", optind);}
+            if (auth_debug)
+                printf("After get_params optind=%d\n", optind);
+
             done = 1;
 
-            if (auth_debug){
+            if (auth_debug)
                 fprintf(stderr,"Command to be executed: %s\n", cmd);
-            }
+
             break;
         case '?':
         default:
@@ -312,26 +322,23 @@ main (argc, argv)
         exit(2);
     }
 
-    if (optind != pargc ){
+    if (optind != pargc) {
         usage();
         exit(2);
     }
 
-    if (auth_debug){
-        for(j=1; params[j] != NULL; j++){
+    if (auth_debug) {
+        for (j = 1; params[j] != NULL; j++) {
             fprintf (stderr,"params[%d]= %s\n", j,params[j]);
         }
     }
 
-    /***********************************/
-    source_user = getlogin(); /*checks for the the login name in /etc/utmp*/
+    source_user = getlogin(); /* Checks for the the login name in /etc/utmp */
 
-    /* verify that that the user exists and get his passwd structure */
-
+    /* Verify that that the user exists and get his passwd structure */
     if (source_user == NULL ||(pwd = getpwnam(source_user)) == NULL ||
-        pwd->pw_uid != ruid){
+        pwd->pw_uid != ruid)
         pwd = getpwuid(ruid);
-    }
 
     if (pwd == NULL) {
         fprintf(stderr, _("ksu: who are you?\n"));
@@ -341,28 +348,27 @@ main (argc, argv)
         fprintf (stderr, _("Your uid doesn't match your passwd entry?!\n"));
         exit (1);
     }
-    /* Okay, now we have *some* passwd entry that matches the
-       current real uid.  */
 
-    /* allocate space and copy the usernamane there */
+    /*
+     * Okay, now we have *some* passwd entry that matches the
+     * current real uid.
+     */
+
+    /* Allocate space and copy the usernamane there */
     source_user = xstrdup(pwd->pw_name);
     source_uid = pwd->pw_uid;
 
-    if (!strcmp(SOURCE_USER_LOGIN, target_user)){
+    if (!strcmp(SOURCE_USER_LOGIN, target_user))
         target_user = xstrdup (source_user);
-    }
 
     if ((target_pwd = getpwnam(target_user)) == NULL){
         fprintf(stderr, _("ksu: unknown login %s\n"), target_user);
         exit(1);
     }
     target_uid = target_pwd->pw_uid;
-
     init_auth_names(target_pwd->pw_dir);
 
-    /***********************************/
-
-    if (cc_source_tag == NULL){
+    if (cc_source_tag == NULL) {
         cc_source_tag = krb5_cc_default_name(ksu_context);
         cc_source_tag_tmp = strchr(cc_source_tag, ':');
         if (cc_source_tag_tmp == 0)
@@ -371,24 +377,27 @@ main (argc, argv)
             cc_source_tag_tmp++;
     }
 
-    /* get a handle for the cache */
-    if ((retval = krb5_cc_resolve(ksu_context, cc_source_tag, &cc_source))){
+    /* Get a handle for the cache */
+    retval = krb5_cc_resolve(ksu_context, cc_source_tag, &cc_source);
+    if (retval) {
         com_err(prog_name, retval, _("while getting source cache"));
         exit(1);
     }
 
-    if ((retval = get_best_princ_for_target(ksu_context, source_uid,
-                                            target_uid, source_user,
-                                            target_user, cc_source,
-                                            options, cmd, localhostname,
-                                            &client, &hp))){
+    retval = get_best_princ_for_target(ksu_context, source_uid, target_uid,
+                                       source_user, target_user, cc_source,
+                                       options, cmd, localhostname, &client,
+                                       &hp);
+    if (retval) {
         com_err(prog_name,retval, _("while selecting the best principal"));
         exit(1);
     }
 
-    /* We may be running as either source or target, depending on
-       what happened; become source.*/
-    if ( geteuid() != source_uid) {
+    /*
+     * We may be running as either source or target, depending on
+     * what happened; become source.
+     */
+    if (geteuid() != source_uid) {
         if (krb5_seteuid(0) || krb5_seteuid(source_uid) ) {
             com_err(prog_name, errno, _("while returning to source uid after "
                                         "finding best principal"));
@@ -396,11 +405,11 @@ main (argc, argv)
         }
     }
 
-    if (auth_debug){
-        if (hp){
+    if (auth_debug) {
+        if (hp) {
             fprintf(stderr,
                     "GET_best_princ_for_target result: NOT AUTHORIZED\n");
-        }else{
+        } else{
             fprintf(stderr,
                     "GET_best_princ_for_target result-best principal ");
             plain_dump_principal (ksu_context, client);
@@ -408,8 +417,10 @@ main (argc, argv)
         }
     }
 
-    if (hp){
-        if (gb_err) fprintf(stderr, "%s", gb_err);
+    if (hp) {
+        if (gb_err)
+            fprintf(stderr, "%s", gb_err);
+
         fprintf(stderr, _("account %s: authorization failed\n"), target_user);
         exit(1);
     }
@@ -428,21 +439,26 @@ main (argc, argv)
      * user to handle authorization and creating the target user's cache.
      */
 
-    /* if root ksu's to a regular user, then
-       then only the credentials for that particular user
-       should be copied */
+    /*
+     * If root ksu's to a regular user, then
+     * then only the credentials for that particular user
+     * should be copied.
+     */
 
     restrict_creds = (source_uid == 0) && (target_uid != 0);
+
     retval = krb5_parse_name(ksu_context, KS_TEMPORARY_PRINC, &tmp_princ);
     if (retval) {
         com_err(prog_name, retval, _("while parsing temporary name"));
         exit(1);
     }
+
     retval = krb5_cc_resolve(ksu_context, KS_TEMPORARY_CACHE, &cc_tmp);
     if (retval) {
         com_err(prog_name, retval, _("while creating temporary cache"));
         exit(1);
     }
+
     retval = krb5_ccache_copy(ksu_context, cc_source, tmp_princ, cc_tmp,
                               restrict_creds, client, &stored);
     if (retval) {
@@ -450,18 +466,16 @@ main (argc, argv)
                 krb5_cc_get_name(ksu_context, cc_source), KS_TEMPORARY_CACHE);
         exit(1);
     }
-    krb5_cc_close(ksu_context, cc_source);
 
+    krb5_cc_close(ksu_context, cc_source);
     krb5_get_init_creds_opt_set_out_ccache(ksu_context, options, cc_tmp);
 
     /* Become root for authentication*/
-
     if (krb5_seteuid(0)) {
         com_err(prog_name, errno, _("while reclaiming root uid"));
         exit(1);
     }
-
-    if ((source_uid == 0) || (target_uid == source_uid)){
+    if ((source_uid == 0) || (target_uid == source_uid)) {
 #ifdef GET_TGT_VIA_PASSWD
         if (!all_rest_copy && given_princ && client != NULL && !stored) {
             fprintf(stderr, _("WARNING: Your password may be exposed if you "
@@ -475,20 +489,19 @@ main (argc, argv)
                     fprintf(stderr, _("Goodbye\n"));
                     exit(1);
                 }
-
                 fprintf(stderr, _("Could not get a tgt for "));
                 plain_dump_principal (ksu_context, client);
                 fprintf(stderr, "\n");
-
             }
             stored = TRUE;
         }
 #endif /* GET_TGT_VIA_PASSWD */
     }
 
-    /* if the user is root or same uid then authentication is not neccesary,
-       root gets in automatically */
-
+    /*
+     * If the user is root or same uid then authentication is not neccesary,
+     * root gets in automatically.
+     */
     if (source_uid && (source_uid != target_uid)) {
         char * client_name;
 
@@ -496,8 +509,8 @@ main (argc, argv)
                                    options, target_user, cc_tmp,
                                    &path_passwd, target_uid);
 
-        /* if Kerberos authentication failed then exit */
-        if (auth_val ==FALSE){
+        /* If Kerberos authentication failed then exit */
+        if (auth_val == FALSE) {
             fprintf(stderr, _("Authentication failed.\n"));
             syslog(LOG_WARNING, "'%s %s' authentication failed for %s%s",
                    prog_name,target_user,source_user,ontty());
@@ -523,7 +536,8 @@ main (argc, argv)
         }
 
         if ((retval = krb5_authorization(ksu_context, client,target_user,
-                                         cmd, &authorization_val, &exec_cmd))){
+                                         cmd, &authorization_val,
+                                         &exec_cmd))) {
             com_err(prog_name,retval, _("while checking authorization"));
             krb5_seteuid(0); /*So we have some chance of sweeping up*/
             exit(1);
@@ -534,8 +548,7 @@ main (argc, argv)
                                         "after authorization check"));
             exit(1);
         }
-        if (authorization_val == TRUE){
-
+        if (authorization_val == TRUE) {
             if (cmd) {
                 print_status(_("Account %s: authorization for %s for "
                                "execution of\n"), target_user, client_name);
@@ -544,16 +557,16 @@ main (argc, argv)
                        "Account %s: authorization for %s for execution of %s successful",
                        target_user, client_name, exec_cmd);
 
-            }else{
+            } else {
                 print_status(_("Account %s: authorization for %s "
                                "successful\n"), target_user, client_name);
                 syslog(LOG_NOTICE,
                        "Account %s: authorization for %s successful",
                        target_user, client_name);
             }
-        }else {
-            if (cmd){
-                if (exec_cmd){ /* was used to pass back the error msg */
+        } else {
+            if (cmd) {
+                if (exec_cmd){ /* Was used to pass back the error msg */
                     fprintf(stderr, "%s", exec_cmd );
                     syslog(LOG_WARNING, "%s",exec_cmd);
                 }
@@ -564,7 +577,7 @@ main (argc, argv)
                        "Account %s: authorization for %s for execution of %s failed",
                        target_user, client_name, cmd );
 
-            }else{
+            } else {
                 fprintf(stderr, _("Account %s: authorization of %s failed\n"),
                         target_user, client_name);
                 syslog(LOG_WARNING,
@@ -572,12 +585,11 @@ main (argc, argv)
                        target_user, client_name);
 
             }
-
             exit(1);
         }
     }
 
-    if( some_rest_copy){
+    if (some_rest_copy) {
         retval = krb5_ccache_filter(ksu_context, cc_tmp, client);
         if (retval) {
             com_err(prog_name,retval, _("while calling cc_filter"));
@@ -585,7 +597,7 @@ main (argc, argv)
         }
     }
 
-    if (all_rest_copy){
+    if (all_rest_copy) {
         retval = krb5_cc_initialize(ksu_context, cc_tmp, tmp_princ);
         if (retval) {
             com_err(prog_name, retval, _("while erasing target cache"));
@@ -594,18 +606,17 @@ main (argc, argv)
         stored = FALSE;
     }
 
-    /* get the shell of the user, this will be the shell used by su */
+    /* Get the shell of the user, this will be the shell used by su */
     target_pwd = getpwnam(target_user);
 
     if (target_pwd->pw_shell)
         shell = xstrdup(target_pwd->pw_shell);
-    else {
+    else
         shell = _DEF_CSH;  /* default is cshell */
-    }
 
 #ifdef HAVE_GETUSERSHELL
 
-    /* insist that the target login uses a standard shell (root is omited) */
+    /* Insist that the target login uses a standard shell (root is omited) */
 
     if (!standard_shell(target_pwd->pw_shell) && source_uid) {
         fprintf(stderr, _("ksu: permission denied (shell).\n"));
@@ -614,25 +625,24 @@ main (argc, argv)
 #endif /* HAVE_GETUSERSHELL */
 
     if (target_pwd->pw_uid){
-
-        if(set_env_var("USER", target_pwd->pw_name)){
+        if (set_env_var("USER", target_pwd->pw_name)) {
             fprintf(stderr,
                     _("ksu: couldn't set environment variable USER\n"));
             exit(1);
         }
     }
 
-    if(set_env_var( "HOME", target_pwd->pw_dir)){
+    if (set_env_var( "HOME", target_pwd->pw_dir)) {
         fprintf(stderr, _("ksu: couldn't set environment variable HOME\n"));
         exit(1);
     }
 
-    if(set_env_var( "SHELL", shell)){
+    if (set_env_var( "SHELL", shell)) {
         fprintf(stderr, _("ksu: couldn't set environment variable SHELL\n"));
         exit(1);
     }
 
-    /* set permissions */
+    /* Set permissions */
     if (setgid(target_pwd->pw_gid) < 0) {
         perror("ksu: setgid");
         exit(1);
@@ -643,10 +653,10 @@ main (argc, argv)
         exit(1);
     }
 
-    if ( ! strcmp(target_user, source_user)){
+    if (!strcmp(target_user, source_user)) {
         print_status(_("Leaving uid as %s (%ld)\n"),
                      target_user, (long) target_pwd->pw_uid);
-    }else{
+    } else {
         print_status(_("Changing uid to %s (%ld)\n"),
                      target_user, (long) target_pwd->pw_uid);
     }
@@ -671,14 +681,17 @@ main (argc, argv)
     retval = resolve_target_cache(ksu_context, client, &cc_target, &cc_reused);
     if (retval)
         exit(1);
+
     retval = krb5_cc_get_full_name(ksu_context, cc_target, &cc_target_tag);
     if (retval) {
         com_err(prog_name, retval, _("while getting name of target ccache"));
         sweep_up(ksu_context, cc_target);
         exit(1);
     }
+
     if (auth_debug)
         fprintf(stderr, " target cache =  %s\n", cc_target_tag);
+
     if (cc_reused)
         keep_target_cache = TRUE;
 
@@ -690,7 +703,6 @@ main (argc, argv)
                     KS_TEMPORARY_CACHE, cc_target_tag);
             exit(1);
         }
-
         if (!ks_ccache_is_initialized(ksu_context, cc_target)) {
             com_err(prog_name, errno,
                     _("%s does not have correct permissions for %s, "
@@ -712,29 +724,26 @@ main (argc, argv)
         if ((source_uid == 0) || (source_uid == target_uid )){
             exec_cmd = cmd;
         }
-
-        if( !exec_cmd){
+        if (!exec_cmd) {
             fprintf(stderr, _("Internal error: command %s did not get "
                               "resolved\n"), cmd);
             exit(1);
         }
-
         params[0] = exec_cmd;
-    }
-    else{
+    } else {
         params[0] = shell;
     }
 
-    if (auth_debug){
+    if (auth_debug) {
         fprintf(stderr, "program to be execed %s\n",params[0]);
     }
 
-    if( keep_target_cache ) {
+    if (keep_target_cache) {
         execv(params[0], params);
         com_err(prog_name, errno, _("while trying to execv %s"), params[0]);
         sweep_up(ksu_context, cc_target);
         exit(1);
-    }else{
+    } else {
         statusp = 1;
         switch ((child_pid = fork())) {
         default:
@@ -753,12 +762,12 @@ main (argc, argv)
                 }
                 break;
             }
-            if (auth_debug){
+
+            if (auth_debug)
                 printf("The exit status of the child is %d\n", statusp);
-            }
-            if (ret_pid == -1) {
+            if (ret_pid == -1)
                 com_err(prog_name, errno, _("while calling waitpid"));
-            }
+
             sweep_up(ksu_context, cc_target);
             exit (statusp);
         case -1:
@@ -774,8 +783,10 @@ main (argc, argv)
     }
 }
 
-/* Set KRB5CCNAME in the environment to point to ccache.  Print an error
- * message on failure. */
+/*
+ * Set KRB5CCNAME in the environment to point to ccache.  Print an error
+ * message on failure.
+ */
 static krb5_error_code
 set_ccname_env(krb5_context ksu_context, krb5_ccache ccache)
 {
@@ -837,8 +848,10 @@ get_configured_defccname(krb5_context context, char **target_out)
     return 0;
 }
 
-/* Determine where the target user's creds should be stored.  Print an error
- * message on failure. */
+/*
+ * Determine where the target user's creds should be stored.  Print an error
+ * message on failure.
+ */
 static krb5_error_code
 resolve_target_cache(krb5_context context, krb5_principal princ,
                      krb5_ccache *ccache_out, krb5_boolean *ccache_reused)
@@ -862,8 +875,10 @@ resolve_target_cache(krb5_context context, krb5_principal princ,
     *sep = ':';
 
     if (!switchable) {
-        /* Try to avoid destroying an in-use target ccache by coming up with
-         * the name of a cache that doesn't exist yet. */
+        /*
+         * Try to avoid destroying an in-use target ccache by coming up with
+         * the name of a cache that doesn't exist yet.
+         */
         do {
             free(ccname);
             retval = gen_sym(context, &sym);
@@ -916,7 +931,8 @@ cleanup:
 
 #ifdef HAVE_GETUSERSHELL
 
-int standard_shell(sh)
+int
+standard_shell(sh)
     char *sh;
 {
     register char *cp;
@@ -925,12 +941,14 @@ int standard_shell(sh)
     while ((cp = getusershell()) != NULL)
         if (!strcmp(cp, sh))
             return (1);
+
     return (0);
 }
 
 #endif /* HAVE_GETUSERSHELL */
 
-static char * ontty()
+static char *
+ontty()
 {
     char *p;
     static char buf[MAXPATHLEN + 5];
@@ -948,7 +966,8 @@ static char * ontty()
 }
 
 
-static int set_env_var(name, value)
+static int
+set_env_var(name, value)
     char *name;
     char *value;
 {
@@ -959,7 +978,8 @@ static int set_env_var(name, value)
 
 }
 
-static void sweep_up(context, cc)
+static void
+sweep_up(context, cc)
     krb5_context context;
     krb5_ccache cc;
 {
@@ -978,16 +998,13 @@ static void sweep_up(context, cc)
     }
 }
 
-/*****************************************************************
-get_params is to be called for the -a option or -e option to
-           collect all params passed in for the shell or for
-           cmd.  An aray is returned containing all params.
-           optindex is incremented accordingly and the first
-           element in the returned array is reserved for the
-           name of the command to be executed or the name of the
-           shell.
-*****************************************************************/
-
+/*
+ * get_params is to be called for the -a option or -e option to collect all
+ * params passed in for the shell or for cmd.  An aray is returned containing
+ * all params. optindex is incremented accordingly and the first element in
+ * the returned array is reserved for the name of the command to be executed
+ * or the name of the shell.
+ */
 krb5_error_code
 get_params(optindex, pargc, pargv, params)
     int *optindex;
@@ -1000,11 +1017,11 @@ get_params(optindex, pargc, pargv, params)
     char ** ret_params;
     int size = pargc - *optindex + 2;
 
-    if ((ret_params = (char **) calloc(size, sizeof (char *)))== NULL ){
+    ret_params = (char **)calloc(size, sizeof(char *));
+    if (ret_params == NULL)
         return ENOMEM;
-    }
 
-    for (i = *optindex, j=1; i < pargc; i++,j++){
+    for (i = *optindex, j = 1; i < pargc; i++, j++) {
         ret_params[j] = pargv[i];
         *optindex = *optindex + 1;
     }
@@ -1018,7 +1035,7 @@ static
 void print_status(const char *fmt, ...)
 {
     va_list ap;
-    if (! quiet){
+    if (!quiet){
         va_start(ap, fmt);
         vfprintf(stderr, fmt, ap);
         va_end(ap);

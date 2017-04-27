@@ -1,4 +1,5 @@
 /* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
 #include "k5-platform.h"
 #include <locale.h>
 #include <sys/types.h>
@@ -15,8 +16,8 @@
 #ifdef HAVE_PWD_H
 #include <pwd.h>
 
-static
-void get_name_from_passwd_file(program_name, kcontext, me)
+static void
+get_name_from_passwd_file(program_name, kcontext, me)
     char * program_name;
     krb5_context kcontext;
     krb5_principal * me;
@@ -35,7 +36,8 @@ void get_name_from_passwd_file(program_name, kcontext, me)
     }
 }
 #else /* HAVE_PWD_H */
-void get_name_from_passwd_file(kcontext, me)
+void
+get_name_from_passwd_file(kcontext, me)
     krb5_context kcontext;
     krb5_principal * me;
 {
@@ -78,20 +80,22 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    /* in order, use the first of:
-       - a name specified on the command line
-       - the principal name from an existing ccache
-       - the name corresponding to the ruid of the process
-
-       otherwise, it's an error.
-       We always attempt to open the default ccache in order to use FAST if
-       possible.
-    */
+    /*
+     * In order, use the first of:
+     * - A name specified on the command line
+     * - The principal name from an existing ccache
+     * - The name corresponding to the ruid of the process
+     *
+     * Otherwise, it's an error.
+     * We always attempt to open the default ccache in order to use FAST if
+     * possible.
+     */
     ret = krb5_cc_default(context, &ccache);
     if (ret != 0) {
         com_err(argv[0], ret, _("opening default ccache"));
         exit(1);
     }
+
     ret = krb5_cc_get_principal(context, ccache, &princ);
     if (ret != 0 && ret != KRB5_CC_NOTFOUND && ret != KRB5_FCC_NOFILE) {
         com_err(argv[0], ret, _("getting principal from ccache"));
@@ -106,11 +110,13 @@ int main(int argc, char *argv[])
             }
         }
     }
+
     ret = krb5_cc_close(context, ccache);
     if (ret != 0) {
         com_err(argv[0], ret, _("closing ccache"));
         exit(1);
     }
+
     if (pname) {
         krb5_free_principal(context, princ);
         princ = NULL;
@@ -119,6 +125,7 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
+
     if (princ == NULL)
         get_name_from_passwd_file(argv[0], context, &princ);
 
@@ -130,11 +137,13 @@ int main(int argc, char *argv[])
     if ((ret = krb5_get_init_creds_password(context, &creds, princ, NULL,
                                             krb5_prompter_posix, NULL,
                                             0, "kadmin/changepw", opts))) {
+
         if (ret == KRB5KRB_AP_ERR_BAD_INTEGRITY)
             com_err(argv[0], 0,
                     _("Password incorrect while getting initial ticket"));
         else
             com_err(argv[0], ret, _("getting initial ticket"));
+
         krb5_get_init_creds_opt_free(context, opts);
         exit(1);
     }
@@ -167,10 +176,11 @@ int main(int argc, char *argv[])
 
     if (result_string.data != NULL)
         free(result_string.data);
+
     if (result_code_string.data != NULL)
         free(result_code_string.data);
-    krb5_get_init_creds_opt_free(context, opts);
 
+    krb5_get_init_creds_opt_free(context, opts);
     printf(_("Password changed.\n"));
     exit(0);
 }

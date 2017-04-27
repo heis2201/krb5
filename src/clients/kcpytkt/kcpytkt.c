@@ -7,18 +7,22 @@
 #include "k5-platform.h"
 
 static char *prog;
+static int quiet = 0;
 
-static void xusage()
+static void
+xusage()
 {
-    fprintf(stderr, "xusage: %s [-c from_ccache] [-e etype] [-f flags] dest_ccache service1 service2 ...\n", prog);
+    fprintf(stderr, "xusage: %s [-c from_ccache] [-e etype] [-f flags] "
+            "dest_ccache service1 service2 ...\n", prog);
     exit(1);
 }
 
-int quiet = 0;
+static void
+do_kcpytkt(int argc, char *argv[], char *fromccachestr, char *etypestr,
+           int flags);
 
-static void do_kcpytkt (int argc, char *argv[], char *fromccachestr, char *etypestr, int flags);
-
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
     int option;
     char *etypestr = 0;
@@ -56,8 +60,9 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-static void do_kcpytkt (int count, char *names[],
-                        char *fromccachestr, char *etypestr, int flags)
+static void
+do_kcpytkt(int count, char *names[], char *fromccachestr, char *etypestr,
+           int flags)
 {
     krb5_context context;
     krb5_error_code ret;
@@ -75,7 +80,6 @@ static void do_kcpytkt (int count, char *names[],
         com_err(prog, ret, "while initializing krb5 library");
         exit(1);
     }
-
     if (etypestr) {
         ret = krb5_string_to_enctype(etypestr, &etype);
         if (ret) {
@@ -92,6 +96,7 @@ static void do_kcpytkt (int count, char *names[],
         ret = krb5_cc_resolve(context, fromccachestr, &fromccache);
     else
         ret = krb5_cc_default(context, &fromccache);
+
     if (ret) {
         com_err(prog, ret, "while opening source ccache");
         exit(1);
@@ -121,6 +126,7 @@ static void do_kcpytkt (int count, char *names[],
             if (!quiet)
                 fprintf(stderr, "%s: %s while parsing principal name\n",
                         names[i], error_message(ret));
+
             errors++;
             continue;
         }
@@ -129,6 +135,7 @@ static void do_kcpytkt (int count, char *names[],
         if (ret) {
             fprintf(stderr, "%s: %s while printing principal name\n",
                     names[i], error_message(ret));
+
             errors++;
             continue;
         }
@@ -142,22 +149,18 @@ static void do_kcpytkt (int count, char *names[],
                     princ, error_message(ret));
 
             krb5_free_unparsed_name(context, princ);
-
             errors++;
             continue;
         }
 
         ret = krb5_cc_store_cred(context, destccache, &out_creds);
-
         krb5_free_principal(context, in_creds.server);
-
         if (ret) {
             fprintf(stderr, "%s: %s while removing credentials\n",
                     princ, error_message(ret));
 
             krb5_free_cred_contents(context, &out_creds);
             krb5_free_unparsed_name(context, princ);
-
             errors++;
             continue;
         }

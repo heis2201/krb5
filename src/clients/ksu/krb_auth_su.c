@@ -29,7 +29,8 @@
 #include "ksu.h"
 
 
-void plain_dump_principal ();
+void
+plain_dump_principal();
 
 krb5_boolean krb5_auth_check(context, client_pname, hostname, options,
                              target_user, cc, path_passwd, target_uid)

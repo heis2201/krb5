@@ -27,7 +27,8 @@
 #include "k5-platform.h"
 #include "ksu.h"
 
-void *xmalloc (size_t sz)
+void *
+xmalloc (size_t sz)
 {
     void *ret = malloc (sz);
     if (ret == 0 && sz != 0) {
@@ -37,7 +38,8 @@ void *xmalloc (size_t sz)
     return ret;
 }
 
-void *xrealloc (void *old, size_t newsz)
+void *
+xrealloc(void *old, size_t newsz)
 {
     void *ret = realloc (old, newsz);
     if (ret == 0 && newsz != 0) {
@@ -47,7 +49,8 @@ void *xrealloc (void *old, size_t newsz)
     return ret;
 }
 
-void *xcalloc (size_t nelts, size_t eltsz)
+void *
+xcalloc(size_t nelts, size_t eltsz)
 {
     void *ret = calloc (nelts, eltsz);
     if (ret == 0 && nelts != 0 && eltsz != 0) {
@@ -57,7 +60,8 @@ void *xcalloc (size_t nelts, size_t eltsz)
     return ret;
 }
 
-char *xstrdup (const char *src)
+char *
+xstrdup(const char *src)
 {
     size_t len = strlen (src) + 1;
     char *dst = xmalloc (len);
@@ -65,7 +69,8 @@ char *xstrdup (const char *src)
     return dst;
 }
 
-char *xasprintf (const char *format, ...)
+char *
+xasprintf(const char *format, ...)
 {
     char *out;
     va_list args;

@@ -49,7 +49,8 @@ extern char *optarg;
 char *progname;
 
 
-static void usage()
+static void
+usage()
 {
 #define KRB_AVAIL_STRING(x) ((x)?"available":"not available")
 
@@ -85,9 +86,7 @@ print_remaining_cc_warning(krb5_context context)
 }
 
 int
-main(argc, argv)
-    int argc;
-    char **argv;
+main(int argc, char *argv[])
 {
     krb5_context kcontext;
     krb5_error_code retval;
@@ -135,9 +134,8 @@ main(argc, argv)
     if (optind != argc)
         errflg++;
 
-    if (errflg) {
+    if (errflg)
         usage();
-    }
 
     retval = krb5_init_context(&kcontext);
     if (retval) {
@@ -202,5 +200,6 @@ main(argc, argv)
         print_remaining_cc_warning(kcontext);
 
     krb5_free_context(kcontext);
+
     return errflg;
 }

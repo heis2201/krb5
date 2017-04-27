@@ -36,6 +36,7 @@ extern int optind;
 extern char *optarg;
 
 static char *prog;
+static int quiet = 0;
 
 static void xusage()
 {
@@ -44,8 +45,6 @@ static void xusage()
     fprintf(stderr, _("\tservice1 service2 ...\n"));
     exit(1);
 }
-
-int quiet = 0;
 
 static void do_v5_kvno (int argc, char *argv[],
                         char *ccachestr, char *etypestr, char *keytab_name,
@@ -56,7 +55,8 @@ static void do_v5_kvno (int argc, char *argv[],
 static void extended_com_err_fn (const char *, errcode_t, const char *,
                                  va_list);
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
     int option;
     char *etypestr = NULL, *ccachestr = NULL, *keytab_name = NULL;
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
             break;
         case 'S':
             sname = optarg;
-            if (unknown == 1){
+            if (unknown == 1) {
                 fprintf(stderr,
                         _("Options -u and -S are mutually exclusive\n"));
                 xusage();
@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
             break;
         case 'u':
             unknown = 1;
-            if (sname){
+            if (sname) {
                 fprintf(stderr,
                         _("Options -u and -S are mutually exclusive\n"));
                 xusage();
@@ -151,8 +151,10 @@ static void extended_com_err_fn (const char *myprog, errcode_t code,
     fprintf (stderr, "\n");
 }
 
-/* Request a single service ticket and display its status (unless quiet is
- * set).  On failure, display an error message and return non-zero. */
+/*
+ * Request a single service ticket and display its status (unless quiet is
+ * set). On failure, display an error message and return non-zero.
+ */
 static krb5_error_code
 kvno(const char *name, krb5_ccache ccache, krb5_principal me,
      krb5_enctype etype, krb5_keytab keytab, const char *sname,
@@ -214,7 +216,7 @@ kvno(const char *name, krb5_ccache ccache, krb5_principal me,
         goto cleanup;
     }
 
-    /* we need a native ticket */
+    /* We need a native ticket */
     ret = krb5_decode_ticket(&out_creds->ticket, &ticket);
     if (ret) {
         com_err(prog, ret, _("while decoding ticket for %s"), princ);
@@ -264,10 +266,10 @@ cleanup:
     return ret;
 }
 
-static void do_v5_kvno (int count, char *names[],
-                        char * ccachestr, char *etypestr, char *keytab_name,
-                        char *sname, int canon, int unknown, char *for_user,
-                        int proxy)
+static void
+do_v5_kvno (int count, char *names[], char * ccachestr, char *etypestr,
+            char *keytab_name, char *sname, int canon, int unknown,
+            char *for_user, int proxy)
 {
     krb5_error_code ret;
     int i, errors;
@@ -298,6 +300,7 @@ static void do_v5_kvno (int count, char *names[],
         ret = krb5_cc_resolve(context, ccachestr, &ccache);
     else
         ret = krb5_cc_default(context, &ccache);
+
     if (ret) {
         com_err(prog, ret, _("while opening ccache"));
         exit(1);
@@ -328,8 +331,8 @@ static void do_v5_kvno (int count, char *names[],
     }
 
     errors = 0;
-
     options = 0;
+
     if (canon)
         options |= KRB5_GC_CANONICALIZE;
 
@@ -341,6 +344,7 @@ static void do_v5_kvno (int count, char *names[],
 
     if (keytab)
         krb5_kt_close(context, keytab);
+
     krb5_free_principal(context, me);
     krb5_free_principal(context, for_user_princ);
     krb5_cc_close(context, ccache);

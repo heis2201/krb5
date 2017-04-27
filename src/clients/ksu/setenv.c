@@ -50,9 +50,8 @@ extern void unsetenv(char *);
 #endif
 
 /*
- * setenv --
- *      Set the value of the environmental variable "name" to be
- *      "value".  If rewrite is set, replace any current value.
+ * setenv - Set the value of the environmental variable "name" to be "value".
+ * If rewrite is set, replace any current value.
  */
 #ifndef HAVE_SETENV
 int
@@ -61,48 +60,54 @@ setenv(name, value, rewrite)
     int rewrite;
 {
     extern char **environ;
-    static int alloced;                     /* if allocated space before */
+    static int alloced; /* If allocated space before */
     register char *C;
     int l_value, offset;
 
-    if (*value == '=')                      /* no `=' in value */
+    /* No `=` in value */
+    if (*value == '=')
         ++value;
+
     l_value = strlen(value);
-    if ((C = _findenv(name, &offset))) {    /* find if already exists */
+    C = _findenv(name, &offset);
+    if (C) { /* Find if already exists */
         if (!rewrite)
             return(0);
-        if (strlen(C) >= l_value) {     /* old larger; copy over */
+        if (strlen(C) >= l_value) { /* Old larger; copy over */
             while ((*C++ = *value++));
             return(0);
         }
-    }
-    else {                                  /* create new slot */
-        register int    cnt;
-        register char   **P;
+    } else { /* Create new slot */
+        register int cnt;
+        register char **P;
 
         for (P = environ, cnt = 0; *P; ++P, ++cnt);
-        if (alloced) {                  /* just increase size */
+        if (alloced) { /* Just increase size */
             environ = (char **)realloc((char *)environ,
                                        (u_int)(sizeof(char *) * (cnt + 2)));
             if (!environ)
                 return(-1);
-        }
-        else {                          /* get new space */
-            alloced = 1;            /* copy old entries into it */
-            P = (char **)malloc((u_int)(sizeof(char *) *
-                                        (cnt + 2)));
+        } else { /* Get new space */
+            alloced = 1; /* Copy old entries into it */
+            P = (char **)malloc((u_int)(sizeof(char *) * (cnt + 2)));
             if (!P)
                 return(-1);
+
             memcpy(P, environ, cnt * sizeof(char *));
             environ = P;
         }
         environ[cnt + 1] = NULL;
         offset = cnt;
     }
-    for (C = name; *C && *C != '='; ++C);   /* no `=' in name */
-    if (!(environ[offset] =                 /* name + `=' + value */
+
+    /* no `=` in name */
+    for (C = name; *C && *C != '='; ++C);
+
+    /* Name + `=' + value */
+    if (!(environ[offset] =
           malloc((u_int)((int)(C - name) + l_value + 2))))
         return(-1);
+
     for (C = environ[offset]; (*C = *name++) &&( *C != '='); ++C);
     for (*C++ = '='; (*C++ = *value++) != NULL;);
     return(0);
@@ -110,19 +115,18 @@ setenv(name, value, rewrite)
 #endif
 
 /*
- * unsetenv(name) --
- *      Delete environmental variable "name".
+ * unsetenv(name) - Delete environmental variable "name".
  */
 #ifndef HAVE_UNSETENV
 void
 unsetenv(name)
-    char    *name;
+    char *name;
 {
-    extern  char    **environ;
-    register char   **P;
-    int     offset;
+    extern char **environ;
+    register char **P;
+    int offset;
 
-    while (_findenv(name, &offset))         /* if set multiple times */
+    while (_findenv(name, &offset) /* If set multiple times */
         for (P = &environ[offset];; ++P)
             if (!(*P = *(P + 1)))
                 break;
@@ -132,8 +136,7 @@ unsetenv(name)
 /* based on @(#)getenv.c        5.5 (Berkeley) 6/27/88 */
 
 /*
- * getenv --
- *      Returns ptr to value associated with name, if any, else NULL.
+ * getenv - Returns ptr to value associated with name, if any, else NULL.
  */
 #ifndef HAVE_GETENV
 char *

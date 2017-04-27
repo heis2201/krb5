@@ -32,6 +32,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+
 /* Need definition of INET6 before network headers, for IRIX.  */
 #if defined(HAVE_ARPA_INET_H)
 #include <arpa/inet.h>
@@ -65,22 +66,23 @@ krb5_boolean is_local_tgt (krb5_principal princ, krb5_data *realm);
 char * etype_string (krb5_enctype );
 void show_credential (krb5_creds *);
 
-void list_all_ccaches (void);
-int list_ccache (krb5_ccache);
-void show_all_ccaches (void);
-void do_ccache_name (char *);
-int show_ccache (krb5_ccache);
-int check_ccache (krb5_ccache);
-void do_keytab (char *);
-void printtime (time_t);
-void one_addr (krb5_address *);
-void fillit (FILE *, unsigned int, int);
+void list_all_ccaches(void);
+int list_ccache(krb5_ccache);
+void show_all_ccaches(void);
+void do_ccache_name(char *);
+int show_ccache(krb5_ccache);
+int check_ccache(krb5_ccache);
+void do_keytab(char *);
+void printtime(time_t);
+void one_addr(krb5_address *);
+void fillit(FILE *, unsigned int, int);
 
 #define DEFAULT 0
 #define CCACHE 1
 #define KEYTAB 2
 
-static void usage()
+static void
+usage()
 {
 #define KRB_AVAIL_STRING(x) ((x)?"available":"not available")
 
@@ -122,9 +124,7 @@ extended_com_err_fn(const char *prog, errcode_t code, const char *fmt,
 }
 
 int
-main(argc, argv)
-    int argc;
-    char **argv;
+main(int argc, char *argv[])
 {
     int c;
     char *name;
@@ -136,7 +136,7 @@ main(argc, argv)
 
     name = NULL;
     mode = DEFAULT;
-    /* V=version so v can be used for verbose later if desired.  */
+    /* V = version so v can be used for verbose later if desired. */
     while ((c = getopt(argc, argv, "dfetKsnacki45lAVC")) != -1) {
         switch (c) {
         case 'd':
@@ -198,18 +198,20 @@ main(argc, argv)
         }
     }
 
-    if (no_resolve && !show_addresses) {
+    if (no_resolve && !show_addresses)
         usage();
-    }
 
     if (mode == DEFAULT || mode == CCACHE) {
+
         if (show_time || show_keys)
             usage();
+
         if ((show_all && list_all) || (status_only && list_all))
             usage();
+
     } else {
-        if (show_flags || status_only || show_addresses ||
-            show_all || list_all)
+        if (show_flags || status_only || show_addresses || show_all ||
+            list_all)
             usage();
     }
 
@@ -220,7 +222,7 @@ main(argc, argv)
     }
 
     if (print_version) {
-#ifdef _WIN32                   /* No access to autoconf vars; fix somehow. */
+#ifdef _WIN32 /* No access to autoconf vars; fix somehow. */
         printf("Kerberos for Windows\n");
 #else
         printf(_("%s version %s\n"), PACKAGE_NAME, PACKAGE_VERSION);
@@ -229,8 +231,8 @@ main(argc, argv)
     }
 
     name = (optind == argc-1) ? argv[optind] : 0;
-
     now = time(0);
+
     {
         char tmp[BUFSIZ];
 
@@ -259,17 +261,17 @@ main(argc, argv)
         else
             do_keytab(name);
     }
-
     return 0;
 }
 
-void do_keytab(name)
+void
+do_keytab(name)
     char *name;
 {
     krb5_keytab kt;
     krb5_keytab_entry entry;
     krb5_kt_cursor cursor;
-    char buf[BUFSIZ]; /* hopefully large enough for any type */
+    char buf[BUFSIZ]; /* Hopefully large enough for any type */
     char *pname;
     int code;
 
@@ -302,7 +304,7 @@ void do_keytab(name)
         exit(1);
     }
 
-    /* XXX Translating would disturb table alignment; skip for now. */
+    /* Translating would disturb table alignment; skip for now. */
     if (show_time) {
         printf("KVNO Timestamp");
         fillit(stdout, timestamp_width - sizeof("Timestamp") + 2, (int) ' ');
@@ -366,10 +368,11 @@ list_all_ccaches(void)
     if (code) {
         if (!status_only)
             com_err(progname, code, _("while listing ccache collection"));
+
         exit(1);
     }
 
-    /* XXX Translating would disturb table alignment; skip for now. */
+    /* Translating would disturb table alignment; skip for now. */
     printf("%-30s %s\n", "Principal name", "Cache name");
     printf("%-30s %s\n", "--------------", "----------");
     exit_status = 1;
@@ -391,11 +394,13 @@ list_ccache(krb5_ccache cache)
     int expired, status = 1;
 
     code = krb5_cc_get_principal(kcontext, cache, &princ);
-    if (code)                   /* Uninitialized cache file, probably. */
+    if (code) /* Uninitialized cache file, probably. */
         goto cleanup;
+
     code = krb5_unparse_name(kcontext, princ, &princname);
     if (code)
         goto cleanup;
+
     code = krb5_cc_get_full_name(kcontext, cache, &ccname);
     if (code)
         goto cleanup;
@@ -403,16 +408,20 @@ list_ccache(krb5_ccache cache)
     expired = check_ccache(cache);
 
     printf("%-30.30s %s", princname, ccname);
+
     if (expired)
         printf(" %s", _("(Expired)"));
+
     printf("\n");
 
     status = 0;
+
 cleanup:
     krb5_free_principal(kcontext, princ);
     krb5_free_unparsed_name(kcontext, princname);
     krb5_free_string(kcontext, ccname);
     return status;
+
 }
 
 void
@@ -428,14 +437,17 @@ show_all_ccaches(void)
     if (code) {
         if (!status_only)
             com_err(progname, code, _("while listing ccache collection"));
+
         exit(1);
     }
     exit_status = 1;
     first = TRUE;
     while (!(code = krb5_cccol_cursor_next(kcontext, cursor, &cache)) &&
            cache != NULL) {
+
         if (!status_only && !first)
             printf("\n");
+
         first = FALSE;
         st = status_only ? check_ccache(cache) : show_ccache(cache);
         exit_status = st && exit_status;
@@ -455,6 +467,7 @@ do_ccache_name(char *name)
         if ((code = krb5_cc_default(kcontext, &cache))) {
             if (!status_only)
                 com_err(progname, code, _("while getting default ccache"));
+
             exit(1);
         }
     } else {
@@ -462,6 +475,7 @@ do_ccache_name(char *name)
             if (!status_only)
                 com_err(progname, code, _("while resolving ccache %s"),
                         name);
+
             exit(1);
         }
     }
@@ -489,7 +503,7 @@ show_ccache(krb5_ccache cache)
     printf(_("Ticket cache: %s:%s\nDefault principal: %s\n\n"),
            krb5_cc_get_type(kcontext, cache),
            krb5_cc_get_name(kcontext, cache), defname);
-    /* XXX Translating would disturb table alignment; skip for now. */
+    /* Translating would disturb table alignment; skip for now. */
     fputs("Valid starting", stdout);
     fillit(stdout, timestamp_width - sizeof("Valid starting") + 3, (int) ' ');
     fputs("Expires", stdout);
@@ -503,6 +517,7 @@ show_ccache(krb5_ccache cache)
     while (!(code = krb5_cc_next_cred(kcontext, cache, &cur, &creds))) {
         if (show_config || !krb5_is_config_principal(kcontext, creds.server))
             show_credential(&creds);
+
         krb5_free_cred_contents(kcontext, &creds);
     }
     krb5_free_principal(kcontext, princ);
@@ -532,8 +547,10 @@ check_ccache(krb5_ccache cache)
 
     if (krb5_cc_get_principal(kcontext, cache, &princ) != 0)
         return 1;
+
     if (krb5_cc_start_seq_get(kcontext, cache, &cur) != 0)
         return 1;
+
     found_tgt = found_current_tgt = found_current_cred = FALSE;
     while (!(ret = krb5_cc_next_cred(kcontext, cache, &cur, &creds))) {
         if (is_local_tgt(creds.server, &princ->realm)) {
@@ -546,16 +563,21 @@ check_ccache(krb5_ccache cache)
         }
         krb5_free_cred_contents(kcontext, &creds);
     }
+
     krb5_free_principal(kcontext, princ);
     if (ret != KRB5_CC_END)
         return 1;
+
     if (krb5_cc_end_seq_get(kcontext, cache, &cur) != 0)
         return 1;
 
-    /* If the cache contains at least one local TGT, require that it be
-     * current.  Otherwise accept any current cred. */
+    /*
+     * If the cache contains at least one local TGT, require that it be
+     * currentm; otherwise accept any current cred.
+     */
     if (found_tgt)
         return found_current_tgt ? 0 : 1;
+
     return found_current_cred ? 0 : 1;
 }
 
@@ -575,10 +597,10 @@ etype_string(enctype)
     static char buf[100];
     krb5_error_code retval;
 
-    if ((retval = krb5_enctype_to_name(enctype, FALSE, buf, sizeof(buf)))) {
-        /* XXX if there's an error != EINVAL, I should probably report it */
+    /* If there's an error != EINVAL, I should probably report it */
+    retval = krb5_enctype_to_name(enctype, FALSE, buf, sizeof(buf));
+    if (retval)
         snprintf(buf, sizeof(buf), "etype %d", enctype);
-    }
 
     return buf;
 }
@@ -615,7 +637,7 @@ flags_string(cred)
     if (cred->ticket_flags & TKT_FLG_TRANSIT_POLICY_CHECKED)
         buf[i++] = 'T';
     if (cred->ticket_flags & TKT_FLG_OK_AS_DELEGATE)
-        buf[i++] = 'O';         /* D/d are taken.  Use short strings?  */
+        buf[i++] = 'O'; /* D/d are taken. Use short strings? */
     if (cred->ticket_flags & TKT_FLG_ANONYMOUS)
         buf[i++] = 'a';
     buf[i] = '\0';
@@ -691,7 +713,6 @@ show_credential(cred)
         putchar(' '); putchar(' ');
         printtime(cred->times.endtime);
         putchar(' '); putchar(' ');
-
         printf("%s\n", sname);
     } else {
         fputs("config: ", stdout);
@@ -720,6 +741,7 @@ show_credential(cred)
             fputs("\t",stdout);
         else
             fputs(", ",stdout);
+
         fputs(_("renew until "), stdout);
         printtime(cred->times.renew_till);
         extra_field += 2;
@@ -737,6 +759,7 @@ show_credential(cred)
                 fputs("\t",stdout);
             else
                 fputs(", ",stdout);
+
             printf(_("Flags: %s"), flags);
             extra_field++;
         }
@@ -756,6 +779,7 @@ show_credential(cred)
             fputs("\t",stdout);
         else
             fputs(", ",stdout);
+
         printf(_("Etype (skey, tkt): %s, "),
                etype_string(cred->keyblock.enctype));
         printf("%s ",
@@ -773,6 +797,7 @@ show_credential(cred)
                 fputs("\t",stdout);
             else
                 fputs(", ",stdout);
+
             printf(_("AD types: "));
             for (i = 0; cred->authdata[i] != NULL; i++) {
                 if (i)
@@ -783,10 +808,9 @@ show_credential(cred)
         }
     }
 
-    /* if any additional info was printed, extra_field is non-zero */
+    /* If any additional info was printed, extra_field is non-zero */
     if (extra_field)
         putchar('\n');
-
 
     if (show_addresses) {
         if (!cred->addresses || !cred->addresses[0]) {
@@ -809,7 +833,7 @@ show_credential(cred)
 }
 
 #include "port-sockets.h"
-#include "socket-utils.h" /* for ss2sin etc */
+#include "socket-utils.h" /* For ss2sin etc */
 #include "fake-addrinfo.h"
 
 void one_addr(a)
@@ -832,7 +856,7 @@ void one_addr(a)
         {
             struct sockaddr_in *sinp = ss2sin (&ss);
             sinp->sin_family = AF_INET;
-            memcpy (&sinp->sin_addr, a->contents, 4);
+            memcpy(&sinp->sin_addr, a->contents, 4);
         }
         break;
     case ADDRTYPE_INET6:
@@ -841,7 +865,7 @@ void one_addr(a)
         {
             struct sockaddr_in6 *sin6p = ss2sin6 (&ss);
             sin6p->sin6_family = AF_INET6;
-            memcpy (&sin6p->sin6_addr, a->contents, 16);
+            memcpy(&sin6p->sin6_addr, a->contents, 16);
         }
         break;
     default:
@@ -863,12 +887,12 @@ void one_addr(a)
 
 void
 fillit(f, num, c)
-    FILE                *f;
-    unsigned int        num;
-    int                 c;
+    FILE *f;
+    unsigned int num;
+    int c;
 {
     unsigned int i;
 
-    for (i=0; i<num; i++)
+    for (i = 0; i < num; i++)
         fputc(c, f);
 }

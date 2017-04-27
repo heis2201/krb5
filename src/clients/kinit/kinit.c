@@ -26,7 +26,7 @@
 
 #include "autoconf.h"
 #include <k5-int.h>
-#include "k5-platform.h"        /* for asprintf and getopt */
+#include "k5-platform.h" /* For asprintf and getopt */
 #include <krb5.h>
 #include "extern.h"
 #include <locale.h>
@@ -81,7 +81,7 @@ typedef enum { INIT_PW, INIT_KT, RENEW, VALIDATE } action_type;
 
 struct k_opts
 {
-    /* in seconds */
+    /* In seconds */
     krb5_deltat starttime;
     krb5_deltat lifetime;
     krb5_deltat rlife;
@@ -125,18 +125,18 @@ struct k5_data
     krb5_boolean switch_to_cache;
 };
 
-/* if struct[2] == NULL, then long_getopt acts as if the short flag
-   struct[3] was specified.  If struct[2] != NULL, then struct[3] is
-   stored in *(struct[2]), the array index which was specified is
-   stored in *index, and long_getopt() returns 0. */
-
+/*
+ * If struct[2] == NULL, then long_getopt acts as if the short flag
+ * struct[3] was specified.  If struct[2] != NULL, then struct[3] is
+ * stored in *(struct[2]), the array index which was specified is
+ * stored in *index, and long_getopt() returns 0.
+ */
 const char *shopts = "r:fpFPn54aAVl:s:c:kit:T:RS:vX:CEI:";
 
 static void
 usage()
 {
 #define USAGE_BREAK "\n\t"
-
 #define USAGE_LONG_FORWARDABLE  " | --forwardable | --noforwardable"
 #define USAGE_LONG_PROXIABLE    " | --proxiable | --noproxiable"
 #define USAGE_LONG_ADDRESSES    " | --addresses | --noaddresses"
@@ -199,15 +199,16 @@ usage()
 }
 
 static krb5_context errctx;
-static void extended_com_err_fn (const char *myprog, errcode_t code,
-                                 const char *fmt, va_list args)
+static void
+extended_com_err_fn (const char *myprog, errcode_t code, const char *fmt,
+                     va_list args)
 {
     const char *emsg;
     emsg = krb5_get_error_message (errctx, code);
-    fprintf (stderr, "%s: %s ", myprog, emsg);
+    fprintf(stderr, "%s: %s ", myprog, emsg);
     krb5_free_error_message (errctx, emsg);
-    vfprintf (stderr, fmt, args);
-    fprintf (stderr, "\n");
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
 }
 
 static int
@@ -223,8 +224,10 @@ add_preauth_opt(struct k_opts *opts, char *av)
     } else {
         size_t newsize = (opts->num_pa_opts + 1) * sizeof(krb5_gic_opt_pa_data);
         x = realloc(opts->pa_opts, newsize);
+
         if (x == NULL)
             return ENOMEM;
+
         opts->pa_opts = x;
     }
     p = &opts->pa_opts[opts->num_pa_opts];
@@ -309,8 +312,10 @@ parse_options(argc, argv, opts)
         case 's':
             code = krb5_string_to_deltat(optarg, &opts->starttime);
             if (code != 0 || opts->starttime == 0) {
-                /* Parse as an absolute time; intentionally undocumented
-                 * but left for backwards compatibility. */
+                /*
+                 * Parse as an absolute time; intentionally undocumented
+                 * but left for backwards compatibility.
+                 */
                 krb5_timestamp abs_starttime;
 
                 code = krb5_string_to_timestamp(optarg, &abs_starttime);
@@ -332,8 +337,7 @@ parse_options(argc, argv, opts)
             opts->use_client_keytab = 1;
             break;
         case 't':
-            if (opts->keytab_name)
-            {
+            if (opts->keytab_name) {
                 fprintf(stderr, _("Only one -t option allowed.\n"));
                 errflg++;
             } else {
@@ -344,7 +348,9 @@ parse_options(argc, argv, opts)
             if (opts->armor_ccache) {
                 fprintf(stderr, _("Only one armor_ccache\n"));
                 errflg++;
-            } else opts->armor_ccache = optarg;
+            } else {
+                opts->armor_ccache = optarg;
+            }
             break;
         case 'R':
             opts->action = RENEW;
@@ -353,8 +359,7 @@ parse_options(argc, argv, opts)
             opts->action = VALIDATE;
             break;
         case 'c':
-            if (opts->k5_out_cache_name)
-            {
+            if (opts->k5_out_cache_name) {
                 fprintf(stderr, _("Only one -c option allowed\n"));
                 errflg++;
             } else {
@@ -371,8 +376,7 @@ parse_options(argc, argv, opts)
             break;
         case 'X':
             code = add_preauth_opt(opts, optarg);
-            if (code)
-            {
+            if (code) {
                 com_err(progname, code, _("while adding preauth option"));
                 errflg++;
             }
@@ -398,48 +402,40 @@ parse_options(argc, argv, opts)
         }
     }
 
-    if (opts->forwardable && opts->not_forwardable)
-    {
+    if (opts->forwardable && opts->not_forwardable) {
         fprintf(stderr, _("Only one of -f and -F allowed\n"));
         errflg++;
     }
-    if (opts->proxiable && opts->not_proxiable)
-    {
+    if (opts->proxiable && opts->not_proxiable) {
         fprintf(stderr, _("Only one of -p and -P allowed\n"));
         errflg++;
     }
-    if (opts->request_pac && opts->not_request_pac)
-    {
+    if (opts->request_pac && opts->not_request_pac) {
         fprintf(stderr, _("Only one of --request-pac and --no-request-pac "
                           "allowed\n"));
         errflg++;
     }
-    if (opts->addresses && opts->no_addresses)
-    {
+    if (opts->addresses && opts->no_addresses) {
         fprintf(stderr, _("Only one of -a and -A allowed\n"));
         errflg++;
     }
-    if (opts->keytab_name != NULL && opts->use_client_keytab == 1)
-    {
+    if (opts->keytab_name != NULL && opts->use_client_keytab == 1) {
         fprintf(stderr, _("Only one of -t and -i allowed\n"));
         errflg++;
     }
     if ((opts->keytab_name != NULL || opts->use_client_keytab == 1) &&
-        opts->action != INIT_KT)
-    {
+        opts->action != INIT_KT) {
         opts->action = INIT_KT;
         fprintf(stderr, _("keytab specified, forcing -k\n"));
     }
-
     if (argc - optind > 1) {
         fprintf(stderr, _("Extra arguments (starting with \"%s\").\n"),
                 argv[optind+1]);
         errflg++;
     }
 
-    if (errflg) {
+    if (errflg)
         usage();
-    }
 
     opts->principal_name = (optind == argc-1) ? argv[optind] : 0;
     return opts->principal_name;
@@ -478,8 +474,10 @@ k5_begin(opts, k5)
                     opts->k5_out_cache_name);
         }
     } else {
-        /* Resolve the default ccache and get its type and default principal
-         * (if it is initialized). */
+        /*
+         * Resolve the default ccache and get its type and default principal
+         * (if it is initialized).
+         */
         code = krb5_cc_default(k5->ctx, &defcache);
         if (code) {
             com_err(progname, code, _("while getting default ccache"));
@@ -559,8 +557,10 @@ k5_begin(opts, k5)
         if (krb5_cc_get_principal(k5->ctx, k5->out_cc, &princ) == 0)
             k5->me = princ;
     } else if (defcache_princ != NULL) {
-        /* Use the default cache's principal, and use the default cache as the
-         * output cache. */
+        /*
+         * Use the default cache's principal, and use the default cache as the
+         * output cache.
+         */
         k5->out_cc = defcache;
         defcache = NULL;
         k5->me = defcache_princ;
@@ -597,8 +597,10 @@ k5_begin(opts, k5)
             }
             k5->switch_to_cache = 1;
         } else if (defcache_princ != NULL) {
-            /* Create a new cache to avoid overwriting the initialized default
-             * cache. */
+            /*
+             * Create a new cache to avoid overwriting the initialized default
+             * cache.
+             */
             code = krb5_cc_new_unique(k5->ctx, deftype, NULL, &k5->out_cc);
             if (code) {
                 com_err(progname, code, _("while generating new ccache"));
@@ -635,7 +637,6 @@ k5_begin(opts, k5)
         }
     }
 
-
     code = krb5_unparse_name(k5->ctx, k5->me, &k5->name);
     if (code) {
         com_err(progname, code, _("when unparsing name"));
@@ -645,12 +646,12 @@ k5_begin(opts, k5)
         fprintf(stderr, _("Using principal: %s\n"), k5->name);
 
     opts->principal_name = k5->name;
-
     success = 1;
 
 cleanup:
     if (defcache != NULL)
         krb5_cc_close(k5->ctx, defcache);
+
     krb5_free_principal(k5->ctx, defcache_princ);
     return success;
 }
@@ -673,16 +674,9 @@ k5_end(k5)
     memset(k5, 0, sizeof(*k5));
 }
 
-static krb5_error_code
-KRB5_CALLCONV
-kinit_prompter(
-    krb5_context ctx,
-    void *data,
-    const char *name,
-    const char *banner,
-    int num_prompts,
-    krb5_prompt prompts[]
-)
+static krb5_error_code KRB5_CALLCONV
+kinit_prompter(krb5_context ctx, void *data, const char *name,
+               const char *banner, int num_prompts, krb5_prompt prompts[])
 {
     krb5_boolean *pwprompt = data;
     krb5_prompt_type *ptypes;
@@ -694,7 +688,6 @@ kinit_prompter(
         if (ptypes != NULL && ptypes[i] == KRB5_PROMPT_TYPE_PASSWORD)
             *pwprompt = TRUE;
     }
-
     return krb5_prompter_posix(ctx, data, name, banner, num_prompts, prompts);
 }
 
@@ -718,9 +711,9 @@ k5_kinit(opts, k5)
         goto cleanup;
 
     /*
-      From this point on, we can goto cleanup because my_creds is
-      initialized.
-    */
+     * From this point on, we can goto cleanup because my_creds is
+     * initialized.
+     */
 
     if (opts->lifetime)
         krb5_get_init_creds_opt_set_tkt_life(options, opts->lifetime);
@@ -738,8 +731,7 @@ k5_kinit(opts, k5)
         krb5_get_init_creds_opt_set_canonicalize(options, 1);
     if (opts->anonymous)
         krb5_get_init_creds_opt_set_anonymous(options, 1);
-    if (opts->addresses)
-    {
+    if (opts->addresses) {
         krb5_address **addresses = NULL;
         code = krb5_os_localaddr(k5->ctx, &addresses);
         if (code != 0) {
@@ -758,8 +750,7 @@ k5_kinit(opts, k5)
         krb5_get_init_creds_opt_set_pac_request(k5->ctx, options, FALSE);
 
 
-    if ((opts->action == INIT_KT) && opts->keytab_name)
-    {
+    if ((opts->action == INIT_KT) && opts->keytab_name) {
 #ifndef _WIN32
         if (strncmp(opts->keytab_name, "KDB:", 4) == 0) {
             code = kinit_kdb_init(&k5->ctx,
@@ -854,8 +845,10 @@ k5_kinit(opts, k5)
             break;
         }
 
-        /* If reply decryption failed, or if pre-authentication failed and we
-         * were prompted for a password, assume the password was wrong. */
+        /*
+         * If reply decryption failed, or if pre-authentication failed and we
+         * were prompted for a password, assume the password was wrong.
+         */
         if (code == KRB5KRB_AP_ERR_BAD_INTEGRITY ||
             (pwprompt && code == KRB5KDC_ERR_PREAUTH_FAILED)) {
             fprintf(stderr, _("%s: Password incorrect while %s\n"), progname,
@@ -886,7 +879,6 @@ k5_kinit(opts, k5)
             fprintf(stderr, _("Stored credentials\n"));
     }
     notix = 0;
-
     if (k5->switch_to_cache) {
         code = krb5_cc_switch(k5->ctx, k5->out_cc);
         if (code) {
@@ -910,15 +902,15 @@ cleanup:
         opts->num_pa_opts = 0;
     }
     krb5_free_cred_contents(k5->ctx, &my_creds);
+
     if (keytab)
         krb5_kt_close(k5->ctx, keytab);
+
     return notix?0:1;
 }
 
 int
-main(argc, argv)
-    int argc;
-    char **argv;
+main(int argc, char *argv[])
 {
     struct k_opts opts;
     struct k5_data k5;
@@ -954,5 +946,6 @@ main(argc, argv)
 
     if (!authed_k5)
         exit(1);
+
     return 0;
 }

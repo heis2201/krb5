@@ -56,32 +56,31 @@ krb5_boolean fowner(fp, uid)
  * determine whether user is authorized to login according to the
  * authorization files ~luser/.k5login" and ~luser/.k5users.  Returns TRUE
  * if authorized, FALSE if not authorized.
- *
  */
-
-krb5_error_code krb5_authorization(context, principal, luser,
-                                   cmd, ok, out_fcmd)
-/* IN */
+krb5_error_code
+krb5_authorization(context, principal, luser, cmd, ok, out_fcmd)
+    /* IN */
     krb5_context context;
     krb5_principal principal;
     const char *luser;
     char *cmd;
+
     /* OUT */
     krb5_boolean *ok;
     char **out_fcmd;
 {
     struct passwd *pwd;
     char *princname;
-    int k5login_flag =0;
-    int k5users_flag =0;
-    krb5_boolean retbool =FALSE;
+    int k5login_flag = 0;
+    int k5users_flag = 0;
+    krb5_boolean retbool = FALSE;
     FILE * login_fp = 0, * users_fp = 0;
     krb5_error_code retval = 0;
     struct stat st_temp;
 
-    *ok =FALSE;
+    *ok = FALSE;
 
-    /* no account => no access */
+    /* No account => no access */
     if ((pwd = getpwnam(luser)) == NULL)
         return 0;
 
@@ -99,52 +98,53 @@ krb5_error_code krb5_authorization(context, principal, luser,
     k5users_flag = stat(k5users_path, &st_temp);
 
     /* k5login and k5users must be owned by target user or root */
-    if (!k5login_flag){
+    if (!k5login_flag) {
         if ((login_fp = fopen(k5login_path, "r")) == NULL)
             return 0;
-        if ( fowner(login_fp, pwd->pw_uid) == FALSE) {
+        if (fowner(login_fp, pwd->pw_uid) == FALSE) {
             fclose(login_fp);
             return 0;
         }
     }
 
-    if (!k5users_flag){
-        if ((users_fp = fopen(k5users_path, "r")) == NULL) {
+    if (!k5users_flag) {
+        users_fp = fopen(k5users_path, "r");
+        if (users_fp == NULL)
             return 0;
-        }
-        if ( fowner(users_fp, pwd->pw_uid) == FALSE){
+        if (fowner(users_fp, pwd->pw_uid) == FALSE) {
             fclose(users_fp);
             return 0;
         }
     }
 
-    if (auth_debug){
+    if (auth_debug) {
         fprintf(stderr,
                 "In krb5_authorization: if auth files exist -> can access\n");
     }
 
 #if 0
-    if (cmd){
-        if(k5users_flag){
-            return 0; /* if  kusers does not exist -> done */
-        }else{
-            if(retval = k5users_lookup(users_fp,princname,
-                                       cmd,&retbool,out_fcmd)){
+    if (cmd) {
+        if (k5users_flag) {
+            return 0; /* If  kusers does not exist -> done */
+        } else {
+            retval = k5users_lookup(users_fp,princname, cmd,&retbool,out_fcmd);
+            if (retval) {
                 auth_cleanup(users_fp, login_fp, princname);
                 return retval;
-            }else{
-                *ok =retbool;
+            } else {
+                *ok = retbool;
                 return retval;
             }
         }
     }
 #endif
 
-    /* if either file exists,
-       first see if the principal is in the login in file,
-       if it's not there check the k5users file */
-
-    if (!k5login_flag){
+    /*
+     * If either file exists,
+     * first see if the principal is in the login in file,
+     * if it's not there check the k5users file.
+     */
+    if (!k5login_flag) {
         if (auth_debug)
             fprintf(stderr,
                     "In krb5_authorization: principal to be authorized %s\n",
@@ -161,41 +161,38 @@ krb5_error_code krb5_authorization(context, principal, luser,
         }
     }
 
-    if ((!k5users_flag) && (retbool == FALSE) ){
+    if ((!k5users_flag) && (retbool == FALSE)) {
         retval = k5users_lookup (users_fp, princname,
                                  cmd, &retbool, out_fcmd);
-        if(retval) {
+        if (retval) {
             auth_cleanup(users_fp, login_fp, princname);
             return retval;
         }
     }
 
-    if (k5login_flag && k5users_flag){
-
+    if (k5login_flag && k5users_flag) {
         char * kuser =  (char *) xcalloc (strlen(princname), sizeof(char));
         if (!(krb5_aname_to_localname(context, principal,
                                       strlen(princname), kuser))
-            && (strcmp(kuser, luser) == 0)) {
+            && (strcmp(kuser, luser) == 0))
             retbool = TRUE;
-        }
 
         free(kuser);
     }
 
-    *ok =retbool;
+    *ok = retbool;
     auth_cleanup(users_fp, login_fp, princname);
     return 0;
 }
 
-/***********************************************************
-k5login_lookup looks for princname in file fp. Spaces
-before the princaname (in the file ) are not ignored
-spaces after the princname are ignored. If there are
-any tokens after the principal name  FALSE is returned.
-
-***********************************************************/
-
-krb5_error_code k5login_lookup (fp, princname, found)
+/*
+ * k5login_lookup looks for princname in file fp. Spaces
+ * before the princaname (in the file ) are not ignored
+ * spaces after the princname are ignored. If there are
+ * any tokens after the principal name  FALSE is returned.
+ */
+krb5_error_code
+k5login_lookup(fp, princname, found)
     FILE *fp;
     char *princname;
     krb5_boolean *found;
@@ -211,53 +208,47 @@ krb5_error_code k5login_lookup (fp, princname, found)
     if (retval)
         return retval;
 
-    while (line){
-        fprinc = get_first_token (line, &lp);
+    while (line) {
+        fprinc = get_first_token(line, &lp);
 
-        if (fprinc && (!strcmp(princname, fprinc))){
-            if( get_next_token (&lp) ){
+        if (fprinc && (!strcmp(princname, fprinc))) {
+            if (get_next_token(&lp)) {
                 free (line);
-                break;  /* nothing should follow princname*/
-            }
-            else{
+                break;  /* Nothing should follow princname*/
+            } else {
                 loc_found = TRUE;
                 free (line);
                 break;
             }
         }
-
         free (line);
-
         retval = get_line(fp, &line);
         if (retval)
             return retval;
     }
-
 
     *found = loc_found;
     return 0;
 
 }
 
-/***********************************************************
-k5users_lookup looks for princname in file fp. Spaces
-before the princaname (in the file ) are not ignored
-spaces after the princname are ignored.
-
-authorization alg:
-
-if princname is not found return false.
-
-if princname is found{
-         if cmd == NULL then the file entry after principal
-                        name must be nothing or *
-
-         if cmd !=NULL  then entry must be matched (* is ok)
-}
-
-
-***********************************************************/
-krb5_error_code k5users_lookup (fp, princname, cmd, found, out_fcmd)
+/*
+ * k5users_lookup looks for princname in file fp. Spaces
+ * before the princaname (in the file) are not ignored
+ * spaces after the princname are ignored.
+ *
+ * authorization alg:
+ *
+ * if princname is not found return false.
+ *
+ * if princname is found {
+ *    if cmd == NULL then the file entry after principal
+ *                         name must be nothing or
+ *    if cmd != NULL then entry must be matched (* is ok)
+ * }
+ */
+krb5_error_code
+k5users_lookup(fp, princname, cmd, found, out_fcmd)
     FILE *fp;
     char *princname;
     char *cmd;
@@ -275,60 +266,61 @@ krb5_error_code k5users_lookup (fp, princname, cmd, found, out_fcmd)
     if (retval)
         return retval;
 
-    while (line){
+    while (line) {
         fprinc = get_first_token (line, &lp);
 
-        if (fprinc && (!strcmp(princname, fprinc))){
+        if (fprinc && (!strcmp(princname, fprinc))) {
             fcmd = get_next_token (&lp);
 
-            if ((fcmd) && (!strcmp(fcmd, PERMIT_ALL_COMMANDS))){
-                if (get_next_token(&lp) == NULL){
-                    loc_fcmd =cmd ? xstrdup(cmd): NULL;
+            if ((fcmd) && (!strcmp(fcmd, PERMIT_ALL_COMMANDS))) {
+                if (get_next_token(&lp) == NULL) {
+                    loc_fcmd = cmd ? xstrdup(cmd): NULL;
                     loc_found = TRUE;
                 }
-                free (line);
+                free(line);
                 break;
             }
 
-            if (cmd == NULL){
+            if (cmd == NULL) {
                 if (fcmd == NULL)
                     loc_found = TRUE;
-                free (line);
+
+                free(line);
                 break;
 
-            }else{
+            } else {
                 if (fcmd != NULL) {
                     char * temp_rfcmd, *err;
                     krb5_boolean match;
                     do {
-                        if(match_commands(fcmd,cmd,&match,
-                                          &temp_rfcmd, &err)){
-                            if (auth_debug){
+                        if (match_commands(fcmd,cmd,&match, &temp_rfcmd,
+                                           &err)) {
+
+                            if (auth_debug)
                                 fprintf(stderr,"%s",err);
-                            }
+
                             loc_fcmd = err;
                             break;
-                        }else{
-                            if (match == TRUE){
+                        } else {
+                            if (match == TRUE) {
                                 loc_fcmd = temp_rfcmd;
                                 loc_found = TRUE;
                                 break;
                             }
                         }
 
-                    }while ((fcmd = get_next_token( &lp)));
+                    } while ((fcmd = get_next_token( &lp)));
                 }
-                free (line);
+                free(line);
                 break;
             }
         }
 
-        free (line);
+        free(line);
 
         retval = get_line(fp, &line);
-        if (retval) {
+        if (retval)
             return retval;
-        }
     }
 
     *out_fcmd = loc_fcmd;
@@ -337,15 +329,13 @@ krb5_error_code k5users_lookup (fp, princname, cmd, found, out_fcmd)
 
 }
 
-
-/***********************************************
-fcmd_resolve -
-takes a command specified .k5users file and
-resolves it into a full path name.
-
-************************************************/
-
-krb5_boolean fcmd_resolve(fcmd, out_fcmd, out_err)
+/*
+ * fcmd_resolve -
+ * takes a command specified .k5users file and
+ * resolves it into a full path name.
+ */
+krb5_boolean
+fcmd_resolve(fcmd, out_fcmd, out_err)
     char *fcmd;
     char ***out_fcmd;
     char **out_err;
@@ -354,18 +344,18 @@ krb5_boolean fcmd_resolve(fcmd, out_fcmd, out_err)
     char ** tmp_fcmd;
     char * path_ptr, *path;
     char * lp, * tc;
-    int i=0;
+    int i = 0;
 
     tmp_fcmd = (char **) xcalloc (MAX_CMD, sizeof(char *));
 
-    if (*fcmd == '/'){  /* must be full path */
+    if (*fcmd == '/') {  /* Must be full path */
         tmp_fcmd[0] = xstrdup(fcmd);
         tmp_fcmd[1] = NULL;
         *out_fcmd = tmp_fcmd;
         return TRUE;
-    }else{
-        /* must be either full path or just the cmd name */
-        if (strchr(fcmd, '/')){
+    } else {
+        /* Must be either full path or just the cmd name */
+        if (strchr(fcmd, '/')) {
             asprintf(&err, _("Error: bad entry - %s in %s file, must be "
                              "either full path or just the cmd name\n"),
                      fcmd, KRB5_USERS_NAME);
@@ -388,27 +378,24 @@ krb5_boolean fcmd_resolve(fcmd, out_fcmd, out_err)
 
         tc = get_first_token (path_ptr, &lp);
 
-        if (! tc){
+        if (!tc) {
             asprintf(&err, _("Error: bad entry - %s in %s file, CMD_PATH "
                              "contains no paths \n"), fcmd, KRB5_USERS_NAME);
             *out_err = err;
             return FALSE;
         }
 
-        i=0;
-        do{
-            if (*tc != '/'){  /* must be full path */
+        i = 0;
+        do {
+            if (*tc != '/') {  /* Must be full path */
                 asprintf(&err, _("Error: bad path %s in CMD_PATH for %s must "
                                  "start with '/' \n"), tc, KRB5_USERS_NAME );
                 *out_err = err;
                 return FALSE;
             }
-
             tmp_fcmd[i] = xasprintf("%s/%s", tc, fcmd);
-
             i++;
-
-        } while((tc = get_next_token (&lp)));
+        } while ((tc = get_next_token(&lp)));
 
         tmp_fcmd[i] = NULL;
         *out_fcmd = tmp_fcmd;
@@ -418,29 +405,25 @@ krb5_boolean fcmd_resolve(fcmd, out_fcmd, out_err)
     }
 }
 
-/********************************************
-cmd_single - checks if cmd consists of a path
-             or a single token
-
-********************************************/
-
-krb5_boolean cmd_single(cmd)
+/*
+ * cmd_single - checks if cmd consists of a path
+ *              or a single token
+ */
+krb5_boolean
+cmd_single(cmd)
     char * cmd;
 {
-
-    if ( ( strrchr( cmd, '/')) ==  NULL){
+    if ((strrchr(cmd, '/')) ==  NULL)
         return TRUE;
-    }else{
+    else
         return FALSE;
-    }
 }
 
-/********************************************
-cmd_arr_cmp_postfix - compares a command with the postfix
-         of fcmd
-********************************************/
-
-int cmd_arr_cmp_postfix(fcmd_arr, cmd)
+/*
+ * cmd_arr_cmp_postfix - compares a command with the postfix of fcmd
+ */
+int
+cmd_arr_cmp_postfix(fcmd_arr, cmd)
     char **fcmd_arr;
     char *cmd;
 {
@@ -449,62 +432,61 @@ int cmd_arr_cmp_postfix(fcmd_arr, cmd)
     int result =1;
     int i = 0;
 
-    while(fcmd_arr[i]){
-        if ( (ptr = strrchr( fcmd_arr[i], '/')) ==  NULL){
+    while (fcmd_arr[i]) {
+        ptr = strrchr(fcmd_arr[i], '/');
+        if (ptr ==  NULL)
             temp_fcmd = fcmd_arr[i];
-        }else {
+        else
             temp_fcmd = ptr + 1;
-        }
 
         result = strcmp (temp_fcmd, cmd);
-        if (result == 0){
+        if (result == 0)
             break;
-        }
+
         i++;
     }
 
     return result;
 
-
 }
 
-/**********************************************
-cmd_arr_cmp - checks if cmd matches any
-              of the fcmd entries.
-
-**********************************************/
-
-int cmd_arr_cmp (fcmd_arr, cmd)
+/*
+ * cmd_arr_cmp - checks if cmd matches any of the fcmd entries.
+ */
+int
+cmd_arr_cmp(fcmd_arr, cmd)
     char **fcmd_arr;
     char *cmd;
 {
-    int result =1;
+    int result = 1;
     int i = 0;
 
-    while(fcmd_arr[i]){
-        result = strcmp (fcmd_arr[i], cmd);
-        if (result == 0){
+    while (fcmd_arr[i]) {
+
+        result = strcmp(fcmd_arr[i], cmd);
+        if (result == 0)
             break;
-        }
+
         i++;
     }
     return result;
 }
 
 
-krb5_boolean find_first_cmd_that_exists(fcmd_arr, cmd_out, err_out)
+krb5_boolean
+find_first_cmd_that_exists(fcmd_arr, cmd_out, err_out)
     char **fcmd_arr;
     char **cmd_out;
     char **err_out;
 {
     struct stat st_temp;
     int i = 0;
-    krb5_boolean retbool= FALSE;
-    int j =0;
+    krb5_boolean retbool = FALSE;
+    int j = 0;
     struct k5buf buf;
 
-    while(fcmd_arr[i]){
-        if (!stat (fcmd_arr[i], &st_temp )){
+    while (fcmd_arr[i]) {
+        if (!stat(fcmd_arr[i], &st_temp)) {
             *cmd_out = xstrdup(fcmd_arr[i]);
             retbool = TRUE;
             break;
@@ -512,11 +494,13 @@ krb5_boolean find_first_cmd_that_exists(fcmd_arr, cmd_out, err_out)
         i++;
     }
 
-    if (retbool == FALSE ){
+    if (retbool == FALSE) {
         k5_buf_init_dynamic(&buf);
         k5_buf_add(&buf, _("Error: not found -> "));
-        for(j= 0; j < i; j ++)
+
+        for (j = 0; j < i; j ++)
             k5_buf_add_fmt(&buf, " %s ", fcmd_arr[j]);
+
         k5_buf_add(&buf, "\n");
         if (k5_buf_status(&buf) != 0) {
             perror(prog_name);
@@ -529,12 +513,11 @@ krb5_boolean find_first_cmd_that_exists(fcmd_arr, cmd_out, err_out)
     return retbool;
 }
 
-/***************************************************************
-returns 1 if there is an error, 0 if no error.
-
-***************************************************************/
-
-int match_commands (fcmd, cmd, match, cmd_out, err_out)
+/*
+ * returns 1 if there is an error, 0 if no error.
+ */
+int
+match_commands(fcmd, cmd, match, cmd_out, err_out)
     char *fcmd;
     char *cmd;
     krb5_boolean *match;
@@ -545,47 +528,44 @@ int match_commands (fcmd, cmd, match, cmd_out, err_out)
     char * err;
     char * cmd_temp;
 
-    if(fcmd_resolve(fcmd, &fcmd_arr, &err )== FALSE ){
+    if (fcmd_resolve(fcmd, &fcmd_arr, &err) == FALSE) {
         *err_out = err;
         return 1;
     }
-
-    if (cmd_single( cmd ) == TRUE){
-        if (!cmd_arr_cmp_postfix(fcmd_arr, cmd)){ /* found */
-
-            if(find_first_cmd_that_exists( fcmd_arr,&cmd_temp,&err)== TRUE){
+    if (cmd_single(cmd) == TRUE) {
+        if (!cmd_arr_cmp_postfix(fcmd_arr, cmd)) { /* Found */
+            if (find_first_cmd_that_exists( fcmd_arr,&cmd_temp,&err) == TRUE) {
                 *match = TRUE;
                 *cmd_out = cmd_temp;
                 return 0;
-            }else{
+            } else {
                 *err_out = err;
                 return 1;
             }
-        }else{
+        } else {
             *match = FALSE;
             return 0;
         }
-    }else{
-        if (!cmd_arr_cmp(fcmd_arr, cmd)){  /* found */
+    } else {
+        if (!cmd_arr_cmp(fcmd_arr, cmd)) { /* Found */
             *match = TRUE;
             *cmd_out = xstrdup(cmd);
             return 0;
-        } else{
+        } else {
             *match = FALSE;
             return 0;
         }
     }
-
 }
 
-/*********************************************************
-   get_line - returns a line of any length.  out_line
-              is set to null if eof.
-*********************************************************/
-
-krb5_error_code get_line (fp, out_line)
-/* IN */
+/*
+ * get_line - returns a line of any length. out_line is set to null if eof.
+ */
+krb5_error_code
+get_line(fp, out_line)
+    /* IN */
     FILE *fp;
+
     /* OUT */
     char **out_line;
 {
@@ -596,97 +576,95 @@ krb5_error_code get_line (fp, out_line)
     line_ptr = line;
     line[0] = '\0';
 
-    while (( r = fgets(line_ptr, BUFSIZ , fp)) != NULL){
+    while ((r = fgets(line_ptr, BUFSIZ , fp)) != NULL) {
         newline = strchr(line_ptr, '\n');
         if (newline) {
             *newline = '\0';
             break;
-        }
-        else {
+        } else {
             chunk_count ++;
-            if(!( line = (char *) realloc( line,
-                                           chunk_count * sizeof(char) * BUFSIZ))){
-                return  ENOMEM;
-            }
+            if (!(line = (char *)realloc(line,
+                                         chunk_count * sizeof(char) * BUFSIZ)))
+                return ENOMEM;
 
-            line_ptr = line + (BUFSIZ -1) *( chunk_count -1) ;
+            line_ptr = line + (BUFSIZ -1) * (chunk_count - 1);
         }
     }
-
-    if ((r == NULL) && (strlen(line) == 0)) {
+    if ((r == NULL) && (strlen(line) == 0))
         *out_line = NULL;
-    }
-    else{
+    else
         *out_line = line;
-    }
 
     return 0;
 }
 
-/*******************************************************
-get_first_token -
-Expects a '\0' terminated input line .
-If there are any spaces before the first token, they
-will be returned as part of the first token.
-
-Note: this routine reuses the space pointed to by line
-******************************************************/
-
-char *  get_first_token (line, lnext)
+/*
+ * get_first_token -
+ * Expects a '\0' terminated input line .
+ * If there are any spaces before the first token, they
+ * will be returned as part of the first token.
+ *
+ * Note: this routine reuses the space pointed to by line
+ */
+char *
+get_first_token(line, lnext)
     char *line;
     char **lnext;
 {
 
     char * lptr, * out_ptr;
-
-
     out_ptr = line;
     lptr = line;
 
-    while (( *lptr == ' ') || (*lptr == '\t')) lptr ++;
+    while ((*lptr == ' ') || (*lptr == '\t'))
+        lptr ++;
 
-    if (strlen(lptr) == 0) return NULL;
+    if (strlen(lptr) == 0)
+        return NULL;
 
-    while (( *lptr != ' ') && (*lptr != '\t') && (*lptr != '\0')) lptr ++;
+    while ((*lptr != ' ') && (*lptr != '\t') && (*lptr != '\0'))
+        lptr++;
 
-    if (*lptr == '\0'){
+    if (*lptr == '\0') {
         *lnext = lptr;
-    } else{
+    } else {
         *lptr = '\0';
         *lnext = lptr + 1;
     }
 
     return out_ptr;
 }
-/**********************************************************
-get_next_token -
-returns the next token pointed to by *lnext.
-returns NULL if there is no more tokens.
-Note: that this function modifies the stream
-      pointed to by *lnext and does not allocate
-      space for the returned tocken. It also advances
-      lnext to the next tocken.
-**********************************************************/
 
-char *  get_next_token (lnext)
+/*
+ * get_next_token -
+ * returns the next token pointed to by *lnext.
+ * returns NULL if there is no more tokens.
+ * Note: that this function modifies the stream
+ *       pointed to by *lnext and does not allocate
+ *       space for the returned tocken. It also advances
+ *       lnext to the next tocken.
+ */
+char *
+get_next_token(lnext)
     char **lnext;
 {
     char * lptr, * out_ptr;
-
-
     lptr = *lnext;
 
-    while (( *lptr == ' ') || (*lptr == '\t')) lptr ++;
+    while ((*lptr == ' ') || (*lptr == '\t'))
+        lptr ++;
 
-    if (strlen(lptr) == 0) return NULL;
+    if (strlen(lptr) == 0)
+        return NULL;
 
     out_ptr = lptr;
 
-    while (( *lptr != ' ') && (*lptr != '\t') && (*lptr != '\0')) lptr ++;
+    while ((*lptr != ' ') && (*lptr != '\t') && (*lptr != '\0'))
+        lptr++;
 
-    if (*lptr == '\0'){
+    if (*lptr == '\0') {
         *lnext = lptr;
-    } else{
+    } else {
         *lptr = '\0';
         *lnext = lptr + 1;
     }
@@ -694,12 +672,12 @@ char *  get_next_token (lnext)
     return out_ptr;
 }
 
-static void auth_cleanup(users_fp, login_fp, princname)
+static void
+auth_cleanup(users_fp, login_fp, princname)
     FILE *users_fp;
     FILE *login_fp;
     char *princname;
 {
-
     free (princname);
     if (users_fp)
         fclose(users_fp);
@@ -707,7 +685,8 @@ static void auth_cleanup(users_fp, login_fp, princname)
         fclose(login_fp);
 }
 
-void init_auth_names(pw_dir)
+void
+init_auth_names(pw_dir)
     char *pw_dir;
 {
     const char *sep;
