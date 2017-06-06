@@ -45,7 +45,8 @@ krb5_error_code next_tcksum(krb5_context context, const krb5_keyblock *ikey,
                             const krb5_data *tcksum_in, const krb5_data *data,
                             krb5_data *tcksum_out);
 
-krb5_error_code derive_key(krb5_context context, const krb5_keyblock *ikey,
+krb5_error_code derive_key(krb5_context context, int32_t group,
+                           const krb5_keyblock *ikey,
                            const krb5_data *spakeresult,
                            const krb5_data *tcksum, const krb5_data *derreq,
                            uint32_t n, krb5_keyblock **out);

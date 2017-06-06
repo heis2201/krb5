@@ -299,21 +299,34 @@ group_optimistic_challenge(groupstate *gstate)
 /* Derive an unsanitized byte vector of length len for the SPAKE w input from
  * ikey.  Place result in allocated storage in *wbytes_out. */
 static krb5_error_code
-derive_wbytes(krb5_context context, const krb5_keyblock *ikey, size_t len,
-              uint8_t **wbytes_out)
+derive_wbytes(krb5_context context, int32_t group, const krb5_keyblock *ikey,
+              size_t len, uint8_t **wbytes_out)
 {
     krb5_error_code ret;
-    uint8_t *wbytes;
-    krb5_data d, prf_input = string2data("SPAKEsecret");
+    struct k5buf buf;
+    uint8_t *wbytes, nbuf[4];
+    krb5_data d, prf_input;
 
     *wbytes_out = NULL;
 
-    wbytes = malloc(len);
-    if (wbytes == NULL)
+    /* Compose the PRF input string. */
+    k5_buf_init_dynamic(&buf);
+    k5_buf_add(&buf, "SPAKEsecret");
+    store_32_be(group, nbuf);
+    k5_buf_add_len(&buf, nbuf, 4);
+    if (buf.data == NULL)
         return ENOMEM;
-    /* XXX draft will change to include group number in PRF+ input */
+    prf_input = make_data(buf.data, buf.len);
+
+    wbytes = malloc(len);
+    if (wbytes == NULL) {
+        free(buf.data);
+        return ENOMEM;
+    }
     d = make_data(wbytes, len);
+
     ret = krb5_c_prfplus(context, ikey, &prf_input, &d);
+    free(buf.data);
     if (ret) {
         free(wbytes);
         return ret;
@@ -348,7 +361,7 @@ group_keygen(krb5_context context, groupstate *gstate, int32_t group,
     if (ret)
         return ret;
 
-    ret = derive_wbytes(context, ikey, reg->mult_len, &wbytes);
+    ret = derive_wbytes(context, group, ikey, reg->mult_len, &wbytes);
     if (ret)
         goto cleanup;
     priv = k5alloc(reg->mult_len, &ret);
@@ -401,7 +414,7 @@ group_result(krb5_context context, groupstate *gstate, int32_t group,
     if (ret)
         return ret;
 
-    ret = derive_wbytes(context, ikey, reg->mult_len, &wbytes);
+    ret = derive_wbytes(context, group, ikey, reg->mult_len, &wbytes);
     if (ret)
         goto cleanup;
     spakeresult = k5alloc(reg->elem_len, &ret);

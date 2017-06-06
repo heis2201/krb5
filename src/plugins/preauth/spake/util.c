@@ -119,7 +119,7 @@ next_tcksum(krb5_context context, const krb5_keyblock *ikey,
  * storage in *out.
  */
 krb5_error_code
-derive_key(krb5_context context, const krb5_keyblock *ikey,
+derive_key(krb5_context context, int32_t group, const krb5_keyblock *ikey,
            const krb5_data *spakeresult, const krb5_data *tcksum,
            const krb5_data *der_req, uint32_t n, krb5_keyblock **out)
 {
@@ -131,8 +131,11 @@ derive_key(krb5_context context, const krb5_keyblock *ikey,
     *out = NULL;
 
     k5_buf_init_dynamic(&buf);
-    k5_buf_add(&buf, "SPAKEKey"); /* XXX may change to SPAKEkey */
-    /* XXX may change to include group number; add parameter */
+    k5_buf_add(&buf, "SPAKEkey");
+    store_32_be(group, nbuf);
+    k5_buf_add_len(&buf, nbuf, 4);
+    store_32_be(ikey->enctype, nbuf);
+    k5_buf_add_len(&buf, nbuf, 4);
     k5_buf_add_len(&buf, spakeresult->data, spakeresult->length);
     k5_buf_add_len(&buf, tcksum->data, tcksum->length);
     k5_buf_add_len(&buf, der_req->data, der_req->length);

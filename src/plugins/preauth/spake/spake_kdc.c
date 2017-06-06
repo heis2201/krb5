@@ -404,7 +404,8 @@ verify_response(krb5_context context, groupstate *gstate,
 
     /* Decrypt the response factor field using K'[1]. */
     der_req = cb->request_body(context, rock);
-    ret = derive_key(context, ikey, &spakeresult, &tcksum, der_req, 1, &k1);
+    ret = derive_key(context, group, ikey, &spakeresult, &tcksum, der_req, 1,
+                     &k1);
     if (ret)
         goto cleanup;
     ret = alloc_data(&der_factor, resp->factor.ciphertext.length);
@@ -427,7 +428,7 @@ verify_response(krb5_context context, groupstate *gstate,
 
     /* XXX additional hops require stage-1 cookie containing SPAKE result */
 
-    ret = derive_key(context, ikey, &spakeresult, &tcksum, der_req, 0,
+    ret = derive_key(context, group, ikey, &spakeresult, &tcksum, der_req, 0,
                      &reply_key);
 
 cleanup:

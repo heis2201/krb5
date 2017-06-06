@@ -201,8 +201,8 @@ process_challenge(krb5_context context, groupstate *gstate, reqstate *st,
     TRACE_SPAKE_TCKSUM(context, &st->tcksum);
 
     /* Replace the reply key with K'[0]. */
-    ret = derive_key(context, st->initial_key, &st->spakeresult, &st->tcksum,
-                     der_req, 0, &k0);
+    ret = derive_key(context, ch->group, st->initial_key, &st->spakeresult,
+                     &st->tcksum, der_req, 0, &k0);
     if (ret)
         goto cleanup;
     ret = cb->set_as_key(context, rock, k0);
@@ -211,8 +211,8 @@ process_challenge(krb5_context context, groupstate *gstate, reqstate *st,
 
     /* Encrypt a SPAKESecondFactor message with K'[1]. */
     /* XXX hardcoded SF-NONE for now */
-    ret = derive_key(context, st->initial_key, &st->spakeresult, &st->tcksum,
-                     der_req, 1, &k1);
+    ret = derive_key(context, ch->group, st->initial_key, &st->spakeresult,
+                     &st->tcksum, der_req, 1, &k1);
     if (ret)
         goto cleanup;
     factor.type = SPAKE_SF_NONE;
