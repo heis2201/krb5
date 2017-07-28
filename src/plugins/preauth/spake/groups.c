@@ -80,7 +80,10 @@ struct groupstate_st {
     size_t ndata;
 };
 
+extern groupdef builtin_ed25519;
+
 static const groupdef *groupdefs[] = {
+    &builtin_ed25519,
 #ifdef SPAKE_OPENSSL
     &openssl_P256,
     &openssl_P384,

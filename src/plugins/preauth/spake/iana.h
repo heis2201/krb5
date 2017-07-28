@@ -44,6 +44,7 @@ typedef enum {
     SPAKE_GROUP_P256 = 1,
     SPAKE_GROUP_P384 = 2,
     SPAKE_GROUP_P521 = 3,
+    SPAKE_GROUP_ED25519 = 4,
 } spake_group;
 
 typedef struct {
