@@ -1,7 +1,7 @@
 #!/usr/bin/python
 from k5test import *
 
-conf={'libdefaults': {'spake_preauth_groups': 'p256'}}
+conf={'libdefaults': {'spake_preauth_groups': 'ed25519'}}
 realm = K5Realm(create_user=False, create_host=False, krb5_conf=conf)
 realm.run([kadminl, 'addprinc', '+requires_preauth', '-pw', 'pw', 'user'])
 
@@ -39,7 +39,7 @@ expect(trace(realm, [kinit, 'user'], input='pw'),
         'Selected etype info:',
         'Sending SPAKE support message',
         'error from KDC: -1765328293/More preauthentication data is required',
-        'SPAKE challenge received with group 1',
+        'SPAKE challenge received with group 4',
         'Sending SPAKE response',
         'AS key determined by preauth:',
         'Decrypted AS reply'))
@@ -50,7 +50,7 @@ expect(trace(realm, [kinit, 'user'], input='wrongpw', expected_code=1),
         'Selected etype info:',
         'Sending SPAKE support message',
         'error from KDC: -1765328293/More preauthentication data is required',
-        'SPAKE challenge received with group 1',
+        'SPAKE challenge received with group 4',
         'Sending SPAKE response',
         'error from KDC: -1765328353/Decrypt integrity check failed'))
 
@@ -59,7 +59,7 @@ expect(trace(realm, ['./icred', '-o', '-135', 'user', 'pw']),
        ('Sending SPAKE support message',
         'error from KDC: -1765328293/More preauthentication data is required',
         'Selected etype info:',
-        'SPAKE challenge received with group 1',
+        'SPAKE challenge received with group 4',
         'Sending SPAKE response',
         'AS key determined by preauth:',
         'Decrypted AS reply'))
@@ -72,24 +72,24 @@ realm.start_kdc(env=oenv)
 expect(trace(realm, [kinit, 'user'], input='pw'),
        ('error from KDC: -1765328359/Additional pre-authentication required',
         'Selected etype info:',
-        'SPAKE challenge received with group 1',
+        'SPAKE challenge received with group 4',
         'Sending SPAKE response',
         'AS key determined by preauth:',
         'Decrypted AS reply'))
 
 # Test KDC optimistic challenge (rejected by client).
-rconf = {'libdefaults': {'spake_preauth_groups': 'testdonotuse,p256',
-                         'spake_preauth_kdc_challenge': 'testdonotuse'}}
+rconf = {'libdefaults': {'spake_preauth_groups': 'P-384,ed25519',
+                         'spake_preauth_kdc_challenge': 'P-384'}}
 renv = realm.special_env('ochal', True, krb5_conf=rconf)
 realm.stop_kdc()
 realm.start_kdc(env=renv)
 expect(trace(realm, [kinit, 'user'], input='pw'),
        ('error from KDC: -1765328359/Additional pre-authentication required',
         'Selected etype info:',
-        'SPAKE challenge with group -1111 rejected',
+        'SPAKE challenge with group 2 rejected',
         'Sending SPAKE support message',
         'error from KDC: -1765328293/More preauthentication data is required',
-        'SPAKE challenge received with group 1',
+        'SPAKE challenge received with group 4',
         'Sending SPAKE response',
         'AS key determined by preauth:',
         'Decrypted AS reply'))
