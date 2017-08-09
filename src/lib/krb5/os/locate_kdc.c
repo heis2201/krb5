@@ -276,8 +276,11 @@ locate_srv_conf_1(krb5_context context, const krb5_data *realm,
         code = k5_parse_host_string(hostspec, default_port, &host, &port_num);
         if (code == 0 && host == NULL)
             code = EINVAL;
-        if (code)
+        if (code) {
+            k5_setmsg(context, code, _("Invalid host specification \"%s\""),
+                      hostspec);
             goto cleanup;
+        }
 
         code = add_host_to_list(serverlist, host, port_num, this_transport,
                                 AF_UNSPEC, uri_path, -1);

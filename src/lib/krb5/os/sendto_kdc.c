@@ -831,8 +831,15 @@ resolve_server(krb5_context context, const krb5_data *realm,
         return EINVAL;
     TRACE_SENDTO_KDC_RESOLVING(context, entry->hostname);
     err = getaddrinfo(entry->hostname, portbuf, &hint, &addrs);
-    if (err)
-        return translate_ai_error(err);
+    if (err) {
+        retval = translate_ai_error(err);
+        if (retval) {
+            k5_setmsg(context, retval,
+                      _("Unexpected name resolution error for \"%s\": %s"),
+                      entry->hostname, gai_strerror(err));
+        }
+        return retval;
+    }
 
     /* Add each address with the specified or preferred transport. */
     retval = 0;
